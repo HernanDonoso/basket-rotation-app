@@ -548,6 +548,94 @@
     resultBox.appendChild(applyBtn);
   }
 
+  // ---------- Matchday attendance import (from Profixio match page) ----------
+  document.getElementById('matchday-parse-btn').addEventListener('click', function () {
+    var text = document.getElementById('matchday-paste').value;
+    var resultBox = document.getElementById('matchday-import-result');
+    resultBox.innerHTML = '';
+
+    if (!text || !text.trim()) {
+      resultBox.innerHTML = '<div class="error-box">Klistra in text från matchens Profixio-sida först.</div>';
+      return;
+    }
+
+    var parsed;
+    try {
+      parsed = parseProfixioMatchday(text);
+    } catch (e) {
+      resultBox.innerHTML = '<div class="error-box">Kunde inte tolka texten: ' + escapeHtml(String(e)) + '</div>';
+      return;
+    }
+
+    if (parsed.length === 0) {
+      resultBox.innerHTML = '<div class="error-box">Hittade inga spelare i den inklistrade texten. ' +
+        'Kontrollera att du kopierade lagpanelen från matchens sida (inloggad vy med anmälda spelare).</div>';
+      return;
+    }
+
+    var sel = matchSelectionWithRoster(state.roster, parsed);
+    renderMatchdayImportResult(sel, parsed);
+  });
+
+  function renderMatchdayImportResult(sel, parsedPlayers) {
+    var resultBox = document.getElementById('matchday-import-result');
+    resultBox.innerHTML = '';
+
+    var info = document.createElement('p');
+    info.className = 'muted';
+    info.textContent = 'Tolkade ' + parsedPlayers.length + ' anmälda spelare från Profixio.';
+    resultBox.appendChild(info);
+
+    if (sel.matchedNames.length) {
+      var matchedSection = document.createElement('div');
+      matchedSection.className = 'diff-section';
+      matchedSection.innerHTML = '<h3>Kommer väljas (anmälda till matchen)</h3>';
+      sel.matchedNames.forEach(function (nm) {
+        var item = document.createElement('div');
+        item.className = 'diff-item add';
+        item.innerHTML = '<span>' + escapeHtml(nm) + '</span><span class="tag">ANMÄLD</span>';
+        matchedSection.appendChild(item);
+      });
+      resultBox.appendChild(matchedSection);
+    }
+
+    if (sel.notSelected.length) {
+      var notSection = document.createElement('div');
+      notSection.className = 'diff-section';
+      notSection.innerHTML = '<h3>Kommer avmarkeras (finns i truppen, inte anmälda till denna match)</h3>';
+      sel.notSelected.forEach(function (nm) {
+        var item = document.createElement('div');
+        item.className = 'diff-item remove';
+        item.innerHTML = '<span>' + escapeHtml(nm) + '</span><span class="tag">EJ ANMÄLD</span>';
+        notSection.appendChild(item);
+      });
+      resultBox.appendChild(notSection);
+    }
+
+    if (sel.unmatched.length) {
+      var warnBox = document.createElement('div');
+      warnBox.className = 'warn-box';
+      warnBox.innerHTML = '<strong>Kunde inte matcha mot truppen:</strong><br>' +
+        sel.unmatched.map(function (nm) { return '• ' + escapeHtml(nm); }).join('<br>') +
+        '<br>Dessa ignoreras — lägg till dem manuellt i Trupp om de saknas.';
+      resultBox.appendChild(warnBox);
+    }
+
+    var applyBtn = document.createElement('button');
+    applyBtn.className = 'btn';
+    applyBtn.style.marginTop = '8px';
+    applyBtn.textContent = 'Sätt matchdagsval efter detta';
+    applyBtn.addEventListener('click', function () {
+      state.selected = sel.matchedNames.slice();
+      persistAll();
+      renderMatchday();
+      resultBox.innerHTML = '<div class="warn-box" style="color:var(--high);border-color:rgba(74,222,128,0.35);background:rgba(74,222,128,0.12);">' +
+        'Klart! ' + sel.matchedNames.length + ' spelare valda för matchen.</div>';
+      document.getElementById('matchday-paste').value = '';
+    });
+    resultBox.appendChild(applyBtn);
+  }
+
   // ---------- Init ----------
   renderSquad();
   renderMatchday();

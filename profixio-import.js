@@ -106,6 +106,75 @@ function diffRosterWithProfixio(currentRoster, profixioPlayers) {
   return { toAdd: toAdd, toRemove: toRemove, toUpdateNumber: toUpdateNumber };
 }
 
+// Parses text pasted from a Profixio MATCH page's roster panel (the logged-in
+// "?tab=progress" view showing which players are actually registered for a
+// specific match — a subset of the full squad). Shape per player row:
+//
+//   AG          <- initials
+//   1           <- jersey number for THIS match (may differ from usual, see
+//                  parseProfixioSquad note on duplicate-number workarounds)
+//   Alvar Grahn <- "Firstname Lastname" on one line (sometimes + trailing "K"
+//                  for captain, on its own line or appended)
+//
+// A staff block (role codes like "AS"/"CO" instead of jersey numbers) follows
+// the players and is skipped. Header noise ("V", "#", "Namn", "Poäng",
+// "Fouls", team name) is ignored by the numeric-line requirement.
+function parseProfixioMatchday(text) {
+  var rawLines = text.split('\n').map(function (l) { return l.trim(); }).filter(function (l) { return l.length > 0; });
+  var initialsRe = /^[A-ZÅÄÖ]{2,6}$/;
+  var numberRe = /^\d{1,3}$/;
+  var n = rawLines.length;
+  var players = [];
+  var i = 0;
+
+  while (i < n) {
+    if (!initialsRe.test(rawLines[i])) { i++; continue; }
+    var j = i + 1;
+    if (j < n && numberRe.test(rawLines[j])) {
+      var number = parseInt(rawLines[j], 10);
+      j++;
+      var nameParts = [];
+      while (j < n && !initialsRe.test(rawLines[j]) && nameParts.length < 3) {
+        if (rawLines[j] !== 'K') nameParts.push(rawLines[j]);
+        j++;
+      }
+      var name = nameParts.join(' ').trim();
+      if (name) {
+        players.push({ initials: rawLines[i], number: number, name: name });
+        i = j;
+        continue;
+      }
+    }
+    i++;
+  }
+  return players;
+}
+
+// Matches a parsed matchday list against the app's roster (by first name /
+// first token) and returns which roster players should be checked/unchecked.
+function matchSelectionWithRoster(roster, matchdayPlayers) {
+  var byFirst = {};
+  roster.forEach(function (p) { byFirst[p.name.toLowerCase()] = p; });
+
+  var matchedNames = [];
+  var unmatched = [];
+  matchdayPlayers.forEach(function (mp) {
+    var firstToken = mp.name.split(' ')[0].toLowerCase();
+    var found = byFirst[firstToken] || byFirst[mp.name.toLowerCase()];
+    if (found) {
+      matchedNames.push(found.name);
+    } else {
+      unmatched.push(mp.name);
+    }
+  });
+
+  var notSelected = roster
+    .map(function (p) { return p.name; })
+    .filter(function (nm) { return matchedNames.indexOf(nm) === -1; });
+
+  return { matchedNames: matchedNames, unmatched: unmatched, notSelected: notSelected };
+}
+
 if (typeof module !== 'undefined') {
-  module.exports = { parseProfixioSquad: parseProfixioSquad, diffRosterWithProfixio: diffRosterWithProfixio };
+  module.exports = { parseProfixioSquad: parseProfixioSquad, diffRosterWithProfixio: diffRosterWithProfixio, parseProfixioMatchday: parseProfixioMatchday, matchSelectionWithRoster: matchSelectionWithRoster };
 }

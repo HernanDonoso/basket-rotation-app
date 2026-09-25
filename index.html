@@ -351,6 +351,16 @@
   <!-- MATCHDAG -->
   <section id="view-matchday" class="view">
     <div class="card">
+      <h2>Importera anmälda från Profixio</h2>
+      <p class="muted">Logga in på profixio.com, öppna matchens sida (matchvis vy — visar
+      vilka som faktiskt anmält sig, till skillnad från hela truppen). Markera panelen med
+      ert lags namn och anmälda spelare, kopiera, klistra in nedan och tryck Tolka.</p>
+      <textarea id="matchday-paste" class="paste-area" rows="4" placeholder="Klistra in text från matchens sida på Profixio här..."></textarea>
+      <button class="btn secondary" id="matchday-parse-btn" style="margin-top:8px;">Tolka</button>
+      <div id="matchday-import-result" style="margin-top:12px;"></div>
+    </div>
+
+    <div class="card">
       <h2>Vilka spelar idag?</h2>
       <div class="selected-count" id="selected-count">0 valda</div>
       <div id="matchday-list"></div>
