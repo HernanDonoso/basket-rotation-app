@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Matchrotation – Fryshuset Eriksdal U13</title>
+<meta name="theme-color" content="#0f172a" />
+<link rel="manifest" href="manifest.json" />
+<style>
+  :root {
+    --bg: #0f172a;
+    --card: #1e293b;
+    --card2: #263449;
+    --border: #334155;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #f97316;
+    --accent2: #fb923c;
+    --low: #f87171;
+    --high: #4ade80;
+    --ok: #22c55e;
+    --warn: #eab308;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding-bottom: 60px;
+  }
+  header {
+    padding: 16px 16px 8px;
+    text-align: center;
+  }
+  header h1 {
+    font-size: 1.25rem;
+    margin: 0 0 4px;
+  }
+  header p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  nav.tabs {
+    display: flex;
+    gap: 6px;
+    padding: 8px 12px;
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 10;
+  }
+  nav.tabs button {
+    flex: 1;
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--muted);
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  nav.tabs button.active {
+    background: var(--accent);
+    color: #1a1005;
+    border-color: var(--accent);
+  }
+  main {
+    padding: 8px 12px 24px;
+    max-width: 640px;
+    margin: 0 auto;
+  }
+  .view { display: none; }
+  .view.active { display: block; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .card h2 {
+    font-size: 1rem;
+    margin: 0 0 10px;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .row:last-child { border-bottom: none; }
+  .row .name {
+    flex: 1;
+    font-weight: 600;
+  }
+  .row .num {
+    color: var(--muted);
+    font-size: 0.8rem;
+    width: 28px;
+  }
+  input[type=number].level {
+    width: 52px;
+    padding: 6px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--card2);
+    color: var(--text);
+    text-align: center;
+    font-size: 0.95rem;
+  }
+  .level-badge {
+    display: inline-block;
+    min-width: 26px;
+    text-align: center;
+    padding: 3px 6px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+  .level-low { background: rgba(248,113,113,0.18); color: var(--low); }
+  .level-high { background: rgba(74,222,128,0.18); color: var(--high); }
+  button.icon-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 1.1rem;
+    padding: 4px 8px;
+    cursor: pointer;
+  }
+  button.icon-btn:hover { color: var(--low); }
+  input[type=text].name-input {
+    flex: 1;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--card2);
+    color: var(--text);
+    font-size: 0.95rem;
+  }
+  .add-row { display: flex; gap: 8px; margin-top: 10px; }
+  .btn {
+    display: inline-block;
+    background: var(--accent);
+    color: #1a1005;
+    border: none;
+    border-radius: 10px;
+    padding: 11px 16px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+    width: 100%;
+    text-align: center;
+  }
+  .btn.secondary {
+    background: var(--card2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn:active { transform: scale(0.98); }
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .checkbox-row:last-child { border-bottom: none; }
+  .checkbox-row input[type=checkbox] {
+    width: 22px;
+    height: 22px;
+    accent-color: var(--accent);
+  }
+  .checkbox-row .name { flex: 1; font-weight: 600; }
+  .selected-count {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin-bottom: 10px;
+  }
+  .settings-grid {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px 12px;
+    align-items: center;
+    font-size: 0.9rem;
+  }
+  .settings-grid input {
+    width: 64px;
+    padding: 6px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--card2);
+    color: var(--text);
+    text-align: center;
+  }
+  .shift-card {
+    background: var(--card2);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 10px;
+    border: 1px solid var(--border);
+  }
+  .shift-card .shift-title {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 8px;
+    font-weight: 700;
+  }
+  .lineup-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .lineup-player {
+    background: var(--card);
+    border-radius: 8px;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.9rem;
+  }
+  .warn-box {
+    background: rgba(234,179,8,0.12);
+    border: 1px solid rgba(234,179,8,0.35);
+    color: var(--warn);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 0.85rem;
+    margin-bottom: 12px;
+  }
+  .error-box {
+    background: rgba(248,113,113,0.12);
+    border: 1px solid rgba(248,113,113,0.35);
+    color: var(--low);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 0.9rem;
+  }
+  table.summary {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+  }
+  table.summary th, table.summary td {
+    text-align: left;
+    padding: 6px 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  table.summary th { color: var(--muted); font-weight: 600; font-size: 0.8rem; }
+  .muted { color: var(--muted); font-size: 0.8rem; }
+  .footer-note {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.75rem;
+    margin-top: 16px;
+    padding: 0 20px;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>🏀 Matchrotation</h1>
+  <p>Fryshuset Eriksdal U13 — 4×8 min, 4 mot 4</p>
+</header>
+
+<nav class="tabs">
+  <button data-view="squad" class="active">Trupp</button>
+  <button data-view="matchday">Matchdag</button>
+  <button data-view="settings">Inställningar</button>
+</nav>
+
+<main>
+  <!-- TRUPP -->
+  <section id="view-squad" class="view active">
+    <div class="card">
+      <h2>Spelartrupp</h2>
+      <p class="muted">Gradering 1-10 styr hur laguppsättningen blandas. 1-4 = lägre, 5-10 = högre.</p>
+      <div id="squad-list"></div>
+      <div class="add-row">
+        <input type="text" id="new-name" class="name-input" placeholder="Nytt spelarnamn" />
+        <input type="number" id="new-level" class="level" min="1" max="10" value="5" />
+        <button class="btn" style="width:auto;" id="add-player-btn">Lägg till</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- MATCHDAG -->
+  <section id="view-matchday" class="view">
+    <div class="card">
+      <h2>Vilka spelar idag?</h2>
+      <div class="selected-count" id="selected-count">0 valda</div>
+      <div id="matchday-list"></div>
+    </div>
+    <button class="btn" id="generate-btn">Skapa lag för matchen</button>
+
+    <div id="result-area" style="margin-top:14px;"></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="view-settings" class="view">
+    <div class="card">
+      <h2>Matchformat</h2>
+      <div class="settings-grid">
+        <label for="set-shifts">Antal byten (perioder à 4 spelare)</label>
+        <input type="number" id="set-shifts" min="1" max="20" value="8" />
+        <label for="set-oncourt">Spelare på plan samtidigt</label>
+        <input type="number" id="set-oncourt" min="2" max="10" value="4" />
+        <label for="set-minutes">Minuter per byte</label>
+        <input type="number" id="set-minutes" min="1" max="20" value="4" />
+        <label for="set-lowmax">Max lägre graderade (1-4) per lag</label>
+        <input type="number" id="set-lowmax" min="0" max="4" value="2" />
+        <label for="set-levelsplit">Gräns låg/hög (≤ detta = lågt)</label>
+        <input type="number" id="set-levelsplit" min="1" max="9" value="4" />
+      </div>
+      <p class="muted" style="margin-top:10px;">Standard matchar U13-reglerna: 4×8 min, 4 mot 4, byte var 4:e minut.
+      Ändra bara om era matchregler skiljer sig.</p>
+      <button class="btn secondary" id="save-settings-btn" style="margin-top:8px;">Spara inställningar</button>
+    </div>
+    <div class="card">
+      <h2>Data</h2>
+      <p class="muted">All data sparas bara i den här webbläsaren/telefonen (localStorage), ingen molnlagring.</p>
+      <button class="btn secondary" id="reset-btn">Återställ trupp till standardlista</button>
+    </div>
+  </section>
+</main>
+
+<p class="footer-note">Sparas lokalt i webbläsaren. Ingen inloggning, ingen server.</p>
+
+<script src="scheduler.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
