@@ -158,12 +158,21 @@ function generateSchedule(selectedPlayers, opts) {
         return bt(0, Object.assign({}, lineupSet), curLow, curHigh, slotsLeft);
       }
 
-      // Pass 1: no consecutive repeats, strict low/high mix
+      // Priority order when constraints conflict: avoiding a player playing
+      // two shifts in a row matters more to the coach than the low/high mix
+      // (mix violations are still flagged, just tolerated further down the
+      // list). Pass order:
+      //   1. no repeat,    strict mix
+      //   2. no repeat,    relaxed mix   <- prefer no-repeat over strict mix
+      //   3. repeat OK,    strict mix
+      //   4. repeat OK,    relaxed mix   (last resort, always succeeds if any exists)
       var solved = backtrackWith(preferredCandidates, true);
-      // Pass 2: allow repeats if unavoidable, still strict low/high mix
-      if (!solved) solved = backtrackWith(remainingCandidates, true);
       var relaxedUsed = false;
-      // Pass 3: allow repeats AND relax low/high mix as last resort
+      if (!solved) {
+        solved = backtrackWith(preferredCandidates, false);
+        relaxedUsed = !!solved;
+      }
+      if (!solved) solved = backtrackWith(remainingCandidates, true);
       if (!solved) {
         solved = backtrackWith(remainingCandidates, false);
         relaxedUsed = true;
