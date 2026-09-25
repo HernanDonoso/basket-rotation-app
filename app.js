@@ -4,7 +4,7 @@
   // Bump this on every deploy (kept in sync with sw.js CACHE version).
   // Used to detect when the running page is stale compared to what's
   // published on GitHub Pages — see checkForUpdate() below.
-  var APP_VERSION = '11';
+  var APP_VERSION = '12';
 
   var DEFAULT_ROSTER = [
     { name: 'Adam', number: 9, level: 3 },
@@ -35,6 +35,7 @@
     levelSplit: 4,
     weightThreshold: 5,
     weightBonusPercent: 0,
+    floorThreshold: 3,
     rollingEnabled: false,
     rollingInterval: 2
   };
@@ -265,6 +266,7 @@
       lowMin: 1,
       weightThreshold: state.settings.weightThreshold,
       weightBonusPercent: state.settings.weightBonusPercent,
+      floorThreshold: state.settings.floorThreshold,
       seed: seed,
       attempts: 400
     });
@@ -296,7 +298,8 @@
       bonusBox.style.background = 'rgba(251,146,60,0.12)';
       bonusBox.textContent = 'Speltidsbonus aktiv: spelare med coachbetyg över ' +
         state.settings.weightThreshold + ' får ~' + state.settings.weightBonusPercent +
-        '% mer speltid än övriga (avviker från helt jämn fördelning).';
+        '% mer speltid än övriga, och garanteras alltid mer speltid än spelare med betyg ≤ ' +
+        state.settings.floorThreshold + ' (avviker från helt jämn fördelning).';
       resultArea.appendChild(bonusBox);
     }
 
@@ -558,6 +561,7 @@
     document.getElementById('set-levelsplit').value = state.settings.levelSplit;
     document.getElementById('set-weight-threshold').value = state.settings.weightThreshold;
     document.getElementById('set-weight-bonus').value = state.settings.weightBonusPercent;
+    document.getElementById('set-floor-threshold').value = state.settings.floorThreshold;
     document.getElementById('set-rolling-enabled').checked = state.settings.rollingEnabled;
     document.getElementById('set-rolling-interval').value = state.settings.rollingInterval;
   }
@@ -571,6 +575,7 @@
     state.settings.levelSplit = clampInt(document.getElementById('set-levelsplit').value, 1, 9, 4);
     state.settings.weightThreshold = clampInt(document.getElementById('set-weight-threshold').value, 1, 10, 5);
     state.settings.weightBonusPercent = clampInt(document.getElementById('set-weight-bonus').value, 0, 100, 0);
+    state.settings.floorThreshold = clampInt(document.getElementById('set-floor-threshold').value, 1, 9, 3);
     state.settings.rollingEnabled = document.getElementById('set-rolling-enabled').checked;
     state.settings.rollingInterval = clampInt(document.getElementById('set-rolling-interval').value, 1, 8, 2);
     persistAll();

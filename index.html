@@ -413,13 +413,18 @@
         <input type="number" id="set-weight-threshold" min="1" max="10" value="5" />
         <label for="set-weight-bonus">Extra speltid i % för högre betyg</label>
         <input type="number" id="set-weight-bonus" min="0" max="100" value="0" />
+        <label for="set-floor-threshold">Golv-tröskel (betyg ≤ detta = garanterat minst speltid)</label>
+        <input type="number" id="set-floor-threshold" min="1" max="9" value="3" />
       </div>
       <p class="muted" style="margin-top:10px;">Standard matchar U13-reglerna: 4×8 min, 4 mot 4, byte var 4:e minut.
       Ändra bara om era matchregler skiljer sig.</p>
       <p class="muted" style="margin-top:6px;">
       <strong>Speltidsbonus (0% som standard = helt jämn speltid, enligt klubbens princip).</strong>
       Sätter du t.ex. 15% får spelare med coachbetyg över tröskeln ~15% mer speltid än övriga.
-      Detta är ett aktivt val att avvika från principen om lika speltid — använd med omtanke.</p>
+      Detta är ett aktivt val att avvika från principen om lika speltid — använd med omtanke.
+      Med Golv-tröskeln aktiv blir det tre nivåer: bonus-spelare (över tröskeln) garanteras
+      alltid MER speltid än golv-spelare (betyg ≤ golv-tröskeln), medan mellangruppen ligger
+      däremellan. Gäller bara när bonus-% är över 0.</p>
       <button class="btn secondary" id="save-settings-btn" style="margin-top:8px;">Spara inställningar</button>
     </div>
     <div class="card">
@@ -455,8 +460,8 @@
 
 <p class="footer-note">Sparas lokalt i webbläsaren. Ingen inloggning, ingen server.</p>
 
-<script src="scheduler.js?v=11"></script>
-<script src="profixio-import.js?v=11"></script>
-<script src="app.js?v=11"></script>
+<script src="scheduler.js?v=12"></script>
+<script src="profixio-import.js?v=12"></script>
+<script src="app.js?v=12"></script>
 </body>
 </html>

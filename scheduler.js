@@ -19,6 +19,12 @@ function generateSchedule(selectedPlayers, opts) {
   var lowThreshold = opts.lowThreshold === undefined ? 4 : opts.lowThreshold;
   var weightThreshold = opts.weightThreshold === undefined ? 5 : opts.weightThreshold;
   var weightBonusPercent = opts.weightBonusPercent === undefined ? 0 : opts.weightBonusPercent;
+  // Three-tier speltid system: BONUS (level > weightThreshold) plays more
+  // than MID (floorThreshold < level <= weightThreshold), which plays more
+  // than GOLV/floor (level <= floorThreshold). Auto-fixed if misconfigured
+  // (floorThreshold must be strictly below weightThreshold).
+  var floorThreshold = opts.floorThreshold === undefined ? 3 : opts.floorThreshold;
+  if (floorThreshold >= weightThreshold) floorThreshold = weightThreshold - 1;
   // Number of shifts that make up one match period (e.g. 2 shifts of 4 min
   // = one 8-min period). "Avoid repeat" only applies WITHIN a period — a
   // player who closes period 1 is free to open period 2 immediately, since
@@ -55,11 +61,56 @@ function generateSchedule(selectedPlayers, opts) {
   // integer quotas always sum exactly to totalSlots. With weightBonusPercent=0
   // this reduces to equal weights (the original fair-rotation behaviour).
   var weightOf = {};
+  var tierOf = {}; // 'bonus' | 'mid' | 'floor'
   names.forEach(function (nm) {
     var lvl = selectedPlayers.filter(function (p) { return p.name === nm; })[0].level;
-    weightOf[nm] = 1.0 + (lvl > weightThreshold ? weightBonusPercent / 100.0 : 0.0);
+    if (lvl > weightThreshold) {
+      tierOf[nm] = 'bonus';
+      weightOf[nm] = 1.0 + weightBonusPercent / 100.0;
+    } else if (lvl <= floorThreshold) {
+      tierOf[nm] = 'floor';
+      weightOf[nm] = 1.0;
+    } else {
+      tierOf[nm] = 'mid';
+      weightOf[nm] = 1.0;
+    }
   });
   var totalWeight = names.reduce(function (sum, nm) { return sum + weightOf[nm]; }, 0);
+  var bonusNames = names.filter(function (nm) { return tierOf[nm] === 'bonus'; });
+  var floorNames = names.filter(function (nm) { return tierOf[nm] === 'floor'; });
+
+  // Hard guarantee (only meaningful when both a bonus and a floor player are
+  // selected today): every bonus-tier player must end up with STRICTLY more
+  // shifts than every floor-tier player — a proportional weight alone can
+  // still tie or invert this in edge cases (see matchrotation-app.md), so we
+  // repair the quota directly after the proportional pass. Moves the minimum
+  // number of shifts from the floor player(s) sitting on the tier's current
+  // max down to the bonus player(s) sitting on the tier's current min, one
+  // shift at a time, until min(bonus) > max(floor) or no further move is
+  // possible (floor player already at 0) — the latter is flagged as a
+  // warning rather than silently left unresolved.
+  function enforceBonusAboveFloor(quota) {
+    if (weightBonusPercent <= 0) return { quota: quota, unresolved: false };
+    if (bonusNames.length === 0 || floorNames.length === 0) return { quota: quota, unresolved: false };
+    var guard = 0;
+    while (guard++ < totalSlots * 2) {
+      var minBonus = Math.min.apply(null, bonusNames.map(function (nm) { return quota[nm]; }));
+      var maxFloor = Math.max.apply(null, floorNames.map(function (nm) { return quota[nm]; }));
+      if (minBonus > maxFloor) break;
+      var floorPick = floorNames.filter(function (nm) { return quota[nm] === maxFloor; }).sort()[0];
+      var bonusPick = bonusNames.filter(function (nm) { return quota[nm] === minBonus; }).sort()[0];
+      if (quota[floorPick] <= 0) return { quota: quota, unresolved: true }; // can't take any more from floor
+      quota[floorPick] -= 1;
+      quota[bonusPick] += 1;
+    }
+    var stillBad = Math.min.apply(null, bonusNames.map(function (nm) { return quota[nm]; })) <=
+      Math.max.apply(null, floorNames.map(function (nm) { return quota[nm]; }));
+    // A floor-tier player reduced all the way to zero playing time is a real
+    // problem worth surfacing on its own, even though the strict bonus>floor
+    // inequality technically still holds (0 minutes counts as "resolved").
+    var zeroedFloor = floorNames.filter(function (nm) { return quota[nm] === 0; });
+    return { quota: quota, unresolved: stillBad, zeroedFloor: zeroedFloor };
+  }
 
   function computeQuota(rng) {
     var ideal = {};
@@ -85,7 +136,7 @@ function generateSchedule(selectedPlayers, opts) {
     for (var i = 0; i < remainder; i++) {
       floorQ[order[i]] += 1;
     }
-    return floorQ;
+    return enforceBonusAboveFloor(floorQ);
   }
 
   function mulberry32(seed) {
@@ -101,7 +152,8 @@ function generateSchedule(selectedPlayers, opts) {
 
   for (var attempt = 0; attempt < attempts; attempt++) {
     var rng = mulberry32((opts.seed || 1) * 7919 + attempt * 104729);
-    var quota = computeQuota(rng);
+    var quotaResult = computeQuota(rng);
+    var quota = quotaResult.quota;
     var remainingQuota = Object.assign({}, quota);
 
     var schedule = [];
@@ -209,7 +261,7 @@ function generateSchedule(selectedPlayers, opts) {
     if (!feasible) continue;
 
     if (best === null || shiftWarnings.length < best.warnings.length) {
-      best = { schedule: schedule, warnings: shiftWarnings, quota: quota };
+      best = { schedule: schedule, warnings: shiftWarnings, quota: quota, quotaResult: quotaResult };
       if (shiftWarnings.length === 0) break; // perfect, stop early
     }
   }
@@ -225,15 +277,25 @@ function generateSchedule(selectedPlayers, opts) {
     lineup.forEach(function (nm) { minutesPerPlayer[nm] += minutesPerShift; });
   });
 
+  var finalWarnings = precheckWarnings.concat(best.warnings.map(function (w) {
+    if (w.type === 'consecutive') {
+      return 'Byte ' + w.shift + ': ' + w.repeats.join(', ') + ' spelar två byten i samma period (kunde inte undvikas givet speltidsmålen).';
+    }
+    return 'Byte ' + w.shift + ': kunde inte hålla ' + lowMin + '-' + lowMax + ' lågt graderade spelare (blev ' + w.lowCount + ') — ' + w.lineup.join(', ');
+  }));
+  if (best.quotaResult.unresolved) {
+    finalWarnings.push('Kunde inte garantera att alla bonusspelare (betyg > ' + weightThreshold +
+      ') fick mer speltid än alla golv-spelare (betyg ≤ ' + floorThreshold +
+      ') — för få byten totalt för antalet spelare i de grupperna.');
+  }
+  if (best.quotaResult.zeroedFloor && best.quotaResult.zeroedFloor.length) {
+    finalWarnings.push('Golv-spelare fick 0 minuter för att garantera bonusspelarna mer speltid: ' +
+      best.quotaResult.zeroedFloor.join(', ') + ' — överväg lägre bonus-% eller färre bonusspelare valda.');
+  }
   return {
     ok: true,
     schedule: best.schedule,
-    warnings: precheckWarnings.concat(best.warnings.map(function (w) {
-      if (w.type === 'consecutive') {
-        return 'Byte ' + w.shift + ': ' + w.repeats.join(', ') + ' spelar två byten i samma period (kunde inte undvikas givet speltidsmålen).';
-      }
-      return 'Byte ' + w.shift + ': kunde inte hålla ' + lowMin + '-' + lowMax + ' lågt graderade spelare (blev ' + w.lowCount + ') — ' + w.lineup.join(', ');
-    })),
+    warnings: finalWarnings,
     minutesPerPlayer: minutesPerPlayer,
     isLow: isLow,
     levelOf: levelOf
