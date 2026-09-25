@@ -373,6 +373,181 @@
     renderMatchday();
   });
 
+  // ---------- Profixio import ----------
+  document.getElementById('profixio-parse-btn').addEventListener('click', function () {
+    var text = document.getElementById('profixio-paste').value;
+    var resultBox = document.getElementById('profixio-result');
+    resultBox.innerHTML = '';
+
+    if (!text || !text.trim()) {
+      resultBox.innerHTML = '<div class="error-box">Klistra in text från Profixios Trupp-sida först.</div>';
+      return;
+    }
+
+    var parsed;
+    try {
+      parsed = parseProfixioSquad(text);
+    } catch (e) {
+      resultBox.innerHTML = '<div class="error-box">Kunde inte tolka texten: ' + escapeHtml(String(e)) + '</div>';
+      return;
+    }
+
+    if (parsed.length === 0) {
+      resultBox.innerHTML = '<div class="error-box">Hittade inga spelare i den inklistrade texten. ' +
+        'Kontrollera att du kopierade från Profixios Trupp-flik (kortvyn med namn, nummer och födelsedatum).</div>';
+      return;
+    }
+
+    var diff = diffRosterWithProfixio(state.roster, parsed);
+
+    if (diff.toAdd.length === 0 && diff.toRemove.length === 0 && diff.toUpdateNumber.length === 0) {
+      resultBox.innerHTML = '<div class="warn-box">Tolkade ' + parsed.length + ' spelare från Profixio — ' +
+        'truppen i appen stämmer redan överens, inga ändringar behövs.</div>';
+      return;
+    }
+
+    renderProfixioDiff(diff, parsed);
+  });
+
+  function renderProfixioDiff(diff, parsedPlayers) {
+    var resultBox = document.getElementById('profixio-result');
+    resultBox.innerHTML = '';
+
+    var info = document.createElement('p');
+    info.className = 'muted';
+    info.textContent = 'Tolkade ' + parsedPlayers.length + ' spelare från Profixio. Kryssa i vad du vill tillämpa:';
+    resultBox.appendChild(info);
+
+    var checkboxRefs = { add: [], remove: [], updateNumber: [] };
+
+    if (diff.toAdd.length) {
+      var addSection = document.createElement('div');
+      addSection.className = 'diff-section';
+      addSection.innerHTML = '<h3>Nya spelare i Profixio (inte i appen)</h3>';
+      diff.toAdd.forEach(function (pp) {
+        var item = document.createElement('div');
+        item.className = 'diff-item add';
+        var label = document.createElement('label');
+        label.className = 'diff-check';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = true;
+        checkboxRefs.add.push({ cb: cb, player: pp });
+        var span = document.createElement('span');
+        span.style.flex = '1';
+        span.textContent = (pp.number ? '#' + pp.number + ' ' : '') + pp.firstname + ' ' + pp.lastname;
+        var tag = document.createElement('span');
+        tag.className = 'tag';
+        tag.textContent = 'LÄGG TILL';
+        label.appendChild(cb);
+        label.appendChild(span);
+        label.appendChild(tag);
+        item.appendChild(label);
+        addSection.appendChild(item);
+      });
+      resultBox.appendChild(addSection);
+    }
+
+    if (diff.toRemove.length) {
+      var removeSection = document.createElement('div');
+      removeSection.className = 'diff-section';
+      removeSection.innerHTML = '<h3>I appen men inte i Profixio (troligen slutat/borttagen)</h3>';
+      diff.toRemove.forEach(function (p) {
+        var item = document.createElement('div');
+        item.className = 'diff-item remove';
+        var label = document.createElement('label');
+        label.className = 'diff-check';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = true;
+        checkboxRefs.remove.push({ cb: cb, player: p });
+        var span = document.createElement('span');
+        span.style.flex = '1';
+        span.textContent = (p.number ? '#' + p.number + ' ' : '') + p.name;
+        var tag = document.createElement('span');
+        tag.className = 'tag';
+        tag.textContent = 'TA BORT';
+        label.appendChild(cb);
+        label.appendChild(span);
+        label.appendChild(tag);
+        item.appendChild(label);
+        removeSection.appendChild(item);
+      });
+      resultBox.appendChild(removeSection);
+    }
+
+    if (diff.toUpdateNumber.length) {
+      var numSection = document.createElement('div');
+      numSection.className = 'diff-section';
+      numSection.innerHTML = '<h3>Tröjnummer skiljer sig</h3>';
+      diff.toUpdateNumber.forEach(function (u) {
+        var item = document.createElement('div');
+        item.className = 'diff-item change';
+        var label = document.createElement('label');
+        label.className = 'diff-check';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = true;
+        checkboxRefs.updateNumber.push({ cb: cb, update: u });
+        var span = document.createElement('span');
+        span.style.flex = '1';
+        span.textContent = u.name + ': #' + (u.oldNumber || '–') + ' → #' + u.newNumber;
+        var tag = document.createElement('span');
+        tag.className = 'tag';
+        tag.textContent = 'UPPDATERA';
+        label.appendChild(cb);
+        label.appendChild(span);
+        label.appendChild(tag);
+        item.appendChild(label);
+        numSection.appendChild(item);
+      });
+      resultBox.appendChild(numSection);
+    }
+
+    var applyBtn = document.createElement('button');
+    applyBtn.className = 'btn';
+    applyBtn.style.marginTop = '8px';
+    applyBtn.textContent = 'Tillämpa valda ändringar';
+    applyBtn.addEventListener('click', function () {
+      var addedNames = [];
+      var removedNames = [];
+
+      checkboxRefs.add.forEach(function (ref) {
+        if (!ref.cb.checked) return;
+        var name = ref.player.firstname.split(' ')[0];
+        if (state.roster.some(function (p) { return p.name.toLowerCase() === name.toLowerCase(); })) return;
+        state.roster.push({ name: name, number: ref.player.number, level: 5 });
+        state.selected.push(name);
+        addedNames.push(name);
+      });
+
+      checkboxRefs.remove.forEach(function (ref) {
+        if (!ref.cb.checked) return;
+        state.roster = state.roster.filter(function (p) { return p !== ref.player; });
+        state.selected = state.selected.filter(function (nm) { return nm !== ref.player.name; });
+        removedNames.push(ref.player.name);
+      });
+
+      checkboxRefs.updateNumber.forEach(function (ref) {
+        if (!ref.cb.checked) return;
+        var p = state.roster.find(function (x) { return x.name === ref.update.name; });
+        if (p) p.number = ref.update.newNumber;
+      });
+
+      persistAll();
+      renderSquad();
+      renderMatchday();
+
+      var summary = [];
+      if (addedNames.length) summary.push('Tillagda: ' + addedNames.join(', '));
+      if (removedNames.length) summary.push('Borttagna: ' + removedNames.join(', '));
+      resultBox.innerHTML = '<div class="warn-box" style="color:var(--high);border-color:rgba(74,222,128,0.35);background:rgba(74,222,128,0.12);">' +
+        'Klart! ' + (summary.length ? escapeHtml(summary.join(' | ')) : 'Inga ändringar tillämpades.') + '</div>';
+      document.getElementById('profixio-paste').value = '';
+    });
+    resultBox.appendChild(applyBtn);
+  }
+
   // ---------- Init ----------
   renderSquad();
   renderMatchday();

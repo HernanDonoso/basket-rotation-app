@@ -261,6 +261,54 @@
     margin-top: 16px;
     padding: 0 20px;
   }
+  textarea.paste-area {
+    width: 100%;
+    min-height: 90px;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--card2);
+    color: var(--text);
+    font-size: 0.85rem;
+    font-family: inherit;
+    resize: vertical;
+  }
+  .diff-section {
+    margin-bottom: 10px;
+  }
+  .diff-section h3 {
+    font-size: 0.85rem;
+    margin: 0 0 6px;
+    color: var(--muted);
+  }
+  .diff-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 10px;
+    border-radius: 8px;
+    margin-bottom: 4px;
+    font-size: 0.88rem;
+  }
+  .diff-item.add { background: rgba(74,222,128,0.12); }
+  .diff-item.remove { background: rgba(248,113,113,0.12); }
+  .diff-item.change { background: rgba(234,179,8,0.12); }
+  .diff-item .tag {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 6px;
+  }
+  .diff-item.add .tag { background: var(--high); color: #06280f; }
+  .diff-item.remove .tag { background: var(--low); color: #3a0a0a; }
+  .diff-item.change .tag { background: var(--warn); color: #3a2c02; }
+  label.diff-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  label.diff-check input { width: 18px; height: 18px; accent-color: var(--accent); }
 </style>
 </head>
 <body>
@@ -287,6 +335,16 @@
         <input type="number" id="new-level" class="level" min="1" max="10" value="5" />
         <button class="btn" style="width:auto;" id="add-player-btn">Lägg till</button>
       </div>
+    </div>
+
+    <div class="card">
+      <h2>Importera från Profixio</h2>
+      <p class="muted">Profixio är ligans officiella system och har sanningen om vilka som är
+      registrerade i laget. Öppna lagets Trupp-sida på Profixio, markera all text på sidan och
+      kopiera (Ctrl/Cmd+A, sedan kopiera), klistra in här och tryck Tolka.</p>
+      <textarea id="profixio-paste" class="paste-area" rows="4" placeholder="Klistra in text från Profixios Trupp-sida här..."></textarea>
+      <button class="btn secondary" id="profixio-parse-btn" style="margin-top:8px;">Tolka</button>
+      <div id="profixio-result" style="margin-top:12px;"></div>
     </div>
   </section>
 
@@ -333,6 +391,7 @@
 <p class="footer-note">Sparas lokalt i webbläsaren. Ingen inloggning, ingen server.</p>
 
 <script src="scheduler.js"></script>
+<script src="profixio-import.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

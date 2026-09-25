@@ -1,5 +1,5 @@
-const CACHE = 'basket-rotation-v2';
-const ASSETS = ['./', './index.html', './app.js', './scheduler.js', './manifest.json', './icon.svg'];
+const CACHE = 'basket-rotation-v3';
+const ASSETS = ['./', './index.html', './app.js', './scheduler.js', './profixio-import.js', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)));
