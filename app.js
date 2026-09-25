@@ -26,7 +26,9 @@
     onCourt: 4,
     minutesPerShift: 4,
     lowMax: 2,
-    levelSplit: 4
+    levelSplit: 4,
+    weightThreshold: 5,
+    weightBonusPercent: 0
   };
 
   var LS_ROSTER = 'basketRotation.roster.v1';
@@ -234,6 +236,8 @@
       lowThreshold: levelOverride,
       lowMax: state.settings.lowMax,
       lowMin: 1,
+      weightThreshold: state.settings.weightThreshold,
+      weightBonusPercent: state.settings.weightBonusPercent,
       seed: seed,
       attempts: 400
     });
@@ -256,6 +260,18 @@
     var levelByName = {};
     selectedPlayers.forEach(function (p) { levelByName[p.name] = p.level; });
     var lowSplit = state.settings.levelSplit;
+
+    if (state.settings.weightBonusPercent > 0) {
+      var bonusBox = document.createElement('div');
+      bonusBox.className = 'warn-box';
+      bonusBox.style.color = 'var(--accent2)';
+      bonusBox.style.borderColor = 'rgba(251,146,60,0.35)';
+      bonusBox.style.background = 'rgba(251,146,60,0.12)';
+      bonusBox.textContent = 'Speltidsbonus aktiv: spelare med coachbetyg över ' +
+        state.settings.weightThreshold + ' får ~' + state.settings.weightBonusPercent +
+        '% mer speltid än övriga (avviker från helt jämn fördelning).';
+      resultArea.appendChild(bonusBox);
+    }
 
     if (res.warnings && res.warnings.length) {
       var warnBox = document.createElement('div');
@@ -342,6 +358,8 @@
     document.getElementById('set-minutes').value = state.settings.minutesPerShift;
     document.getElementById('set-lowmax').value = state.settings.lowMax;
     document.getElementById('set-levelsplit').value = state.settings.levelSplit;
+    document.getElementById('set-weight-threshold').value = state.settings.weightThreshold;
+    document.getElementById('set-weight-bonus').value = state.settings.weightBonusPercent;
   }
 
   document.getElementById('save-settings-btn').addEventListener('click', function () {
@@ -350,6 +368,8 @@
     state.settings.minutesPerShift = clampInt(document.getElementById('set-minutes').value, 1, 20, 4);
     state.settings.lowMax = clampInt(document.getElementById('set-lowmax').value, 0, 4, 2);
     state.settings.levelSplit = clampInt(document.getElementById('set-levelsplit').value, 1, 9, 4);
+    state.settings.weightThreshold = clampInt(document.getElementById('set-weight-threshold').value, 1, 10, 5);
+    state.settings.weightBonusPercent = clampInt(document.getElementById('set-weight-bonus').value, 0, 100, 0);
     persistAll();
     renderSettings();
     renderMatchday();

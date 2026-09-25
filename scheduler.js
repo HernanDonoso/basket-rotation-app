@@ -17,6 +17,8 @@ function generateSchedule(selectedPlayers, opts) {
   var lowMin = opts.lowMin === undefined ? 1 : opts.lowMin;
   var lowMax = opts.lowMax === undefined ? 2 : opts.lowMax;
   var lowThreshold = opts.lowThreshold === undefined ? 4 : opts.lowThreshold;
+  var weightThreshold = opts.weightThreshold === undefined ? 5 : opts.weightThreshold;
+  var weightBonusPercent = opts.weightBonusPercent === undefined ? 0 : opts.weightBonusPercent;
 
   var n = selectedPlayers.length;
   if (n < onCourt) {
@@ -40,16 +42,36 @@ function generateSchedule(selectedPlayers, opts) {
   }
 
   var totalSlots = shifts * onCourt;
-  var base = Math.floor(totalSlots / n);
-  var rem = totalSlots % n;
+  var names = selectedPlayers.map(function (p) { return p.name; });
 
-  function shuffle(arr, rng) {
-    var a = arr.slice();
-    for (var i = a.length - 1; i > 0; i--) {
-      var j = Math.floor(rng() * (i + 1));
-      var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+  // Weighted quota: players above weightThreshold get weightBonusPercent extra
+  // playing time. Uses largest-remainder (Hamilton) apportionment so the
+  // integer quotas always sum exactly to totalSlots. With weightBonusPercent=0
+  // this reduces to equal weights (the original fair-rotation behaviour).
+  var weightOf = {};
+  names.forEach(function (nm) {
+    var lvl = selectedPlayers.filter(function (p) { return p.name === nm; })[0].level;
+    weightOf[nm] = 1.0 + (lvl > weightThreshold ? weightBonusPercent / 100.0 : 0.0);
+  });
+  var totalWeight = names.reduce(function (sum, nm) { return sum + weightOf[nm]; }, 0);
+
+  function computeQuota(rng) {
+    var ideal = {};
+    names.forEach(function (nm) { ideal[nm] = totalSlots * weightOf[nm] / totalWeight; });
+    var floorQ = {};
+    names.forEach(function (nm) { floorQ[nm] = Math.floor(ideal[nm]); });
+    var assigned = names.reduce(function (sum, nm) { return sum + floorQ[nm]; }, 0);
+    var remainder = totalSlots - assigned;
+    // sort by fractional remainder desc, tie-break with rng for variety across matches
+    var order = names.slice().sort(function (a, b) {
+      var diff = (ideal[b] - floorQ[b]) - (ideal[a] - floorQ[a]);
+      if (Math.abs(diff) > 1e-9) return diff;
+      return rng() - 0.5;
+    });
+    for (var i = 0; i < remainder; i++) {
+      floorQ[order[i]] += 1;
     }
-    return a;
+    return floorQ;
   }
 
   function mulberry32(seed) {
@@ -61,16 +83,11 @@ function generateSchedule(selectedPlayers, opts) {
     };
   }
 
-  var names = selectedPlayers.map(function (p) { return p.name; });
-
   var best = null; // {schedule, warnings, quota}
 
   for (var attempt = 0; attempt < attempts; attempt++) {
     var rng = mulberry32((opts.seed || 1) * 7919 + attempt * 104729);
-    var order = shuffle(names, rng);
-    var quota = {};
-    names.forEach(function (nm) { quota[nm] = base; });
-    order.slice(0, rem).forEach(function (nm) { quota[nm] += 1; });
+    var quota = computeQuota(rng);
     var remainingQuota = Object.assign({}, quota);
 
     var schedule = [];
