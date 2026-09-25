@@ -4,7 +4,7 @@
   // Bump this on every deploy (kept in sync with sw.js CACHE version).
   // Used to detect when the running page is stale compared to what's
   // published on GitHub Pages — see checkForUpdate() below.
-  var APP_VERSION = '10';
+  var APP_VERSION = '11';
 
   var DEFAULT_ROSTER = [
     { name: 'Adam', number: 9, level: 3 },
@@ -310,9 +310,18 @@
     }
 
     var minutesPerShift = state.settings.minutesPerShift;
+    var shiftsPerPeriodDisplay = Math.max(1, Math.round(state.settings.periodMinutes / minutesPerShift));
     res.schedule.forEach(function (lineup, i) {
+      var periodIndex = Math.floor(i / shiftsPerPeriodDisplay);
+      if (i % shiftsPerPeriodDisplay === 0) {
+        var periodStartMin = periodIndex * state.settings.periodMinutes;
+        var periodEndMin = Math.min((periodIndex + 1) * state.settings.periodMinutes, res.schedule.length * minutesPerShift);
+        resultArea.appendChild(makePeriodHeader(periodIndex + 1, periodStartMin, periodEndMin));
+      }
+
       var card = document.createElement('div');
       card.className = 'shift-card';
+      card.style.setProperty('--period-color', periodColor(periodIndex));
 
       var title = document.createElement('div');
       title.className = 'shift-title';
@@ -444,9 +453,20 @@
     resultArea.appendChild(eventsCard);
 
     // Full lineup timeline
+    var rollingPeriodMinutes = state.settings.periodMinutes || 8;
+    var lastPeriodIndex = -1;
     res.segments.forEach(function (seg) {
+      var periodIndex = Math.floor(seg.startMin / rollingPeriodMinutes);
+      if (periodIndex !== lastPeriodIndex) {
+        lastPeriodIndex = periodIndex;
+        var periodStartMin = periodIndex * rollingPeriodMinutes;
+        var periodEndMin = Math.min((periodIndex + 1) * rollingPeriodMinutes, res.segments[res.segments.length - 1].endMin);
+        resultArea.appendChild(makePeriodHeader(periodIndex + 1, periodStartMin, periodEndMin));
+      }
+
       var card = document.createElement('div');
       card.className = 'shift-card';
+      card.style.setProperty('--period-color', periodColor(periodIndex));
 
       var title = document.createElement('div');
       title.className = 'shift-title';
@@ -500,6 +520,26 @@
     table.appendChild(tbody);
     summaryCard.appendChild(table);
     resultArea.appendChild(summaryCard);
+  }
+
+  var PERIOD_COLORS = ['#f97316', '#38bdf8', '#4ade80', '#f472b6', '#a78bfa', '#facc15'];
+
+  function periodColor(periodIndex) {
+    return PERIOD_COLORS[periodIndex % PERIOD_COLORS.length];
+  }
+
+  function makePeriodHeader(periodNumber, startMin, endMin) {
+    var header = document.createElement('div');
+    header.className = 'period-header';
+    header.style.background = periodColor(periodNumber - 1);
+    var label = document.createElement('span');
+    label.textContent = 'Period ' + periodNumber;
+    var time = document.createElement('span');
+    time.className = 'period-time';
+    time.textContent = startMin + '–' + endMin + ' min';
+    header.appendChild(label);
+    header.appendChild(time);
+    return header;
   }
 
   function escapeHtml(s) {

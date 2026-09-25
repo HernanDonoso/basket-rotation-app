@@ -202,6 +202,7 @@
     padding: 12px;
     margin-bottom: 10px;
     border: 1px solid var(--border);
+    border-left: 4px solid var(--period-color, var(--border));
   }
   .shift-card .shift-title {
     display: flex;
@@ -210,6 +211,24 @@
     color: var(--muted);
     margin-bottom: 8px;
     font-weight: 700;
+  }
+  .period-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 18px 0 8px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    font-weight: 800;
+    font-size: 0.95rem;
+    color: #0b0b0b;
+  }
+  .period-header:first-child { margin-top: 0; }
+  .period-header .period-time {
+    margin-left: auto;
+    font-weight: 600;
+    font-size: 0.8rem;
+    opacity: 0.85;
   }
   .lineup-grid {
     display: grid;
@@ -436,8 +455,8 @@
 
 <p class="footer-note">Sparas lokalt i webbläsaren. Ingen inloggning, ingen server.</p>
 
-<script src="scheduler.js?v=10"></script>
-<script src="profixio-import.js?v=10"></script>
-<script src="app.js?v=10"></script>
+<script src="scheduler.js?v=11"></script>
+<script src="profixio-import.js?v=11"></script>
+<script src="app.js?v=11"></script>
 </body>
 </html>
