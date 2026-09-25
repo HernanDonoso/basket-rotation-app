@@ -312,6 +312,9 @@
 </style>
 </head>
 <body>
+<div id="update-banner" style="display:none; position:sticky; top:0; z-index:50; background:#f97316; color:#1a1005; text-align:center; padding:10px 16px; font-weight:700; font-size:0.9rem; cursor:pointer;">
+  🔄 Ny version av appen finns — tryck här för att uppdatera
+</div>
 <header>
   <h1>🏀 Matchrotation</h1>
   <p>Fryshuset Eriksdal U13 — 4×8 min, 4 mot 4</p>
@@ -417,6 +420,14 @@
       <h2>Data</h2>
       <p class="muted">All data sparas bara i den här webbläsaren/telefonen (localStorage), ingen molnlagring.</p>
       <button class="btn secondary" id="reset-btn">Återställ trupp till standardlista</button>
+    </div>
+    <div class="card">
+      <h2>Appversion</h2>
+      <p class="muted">Version <span id="app-version-display">?</span>. Appen kollar automatiskt
+      efter nya versioner när du öppnar den och var 5:e minut medan den är öppen. Om något känns
+      fel (t.ex. en inställning eller funktion saknas) — tryck knappen nedan för att tvinga fram
+      senaste versionen direkt.</p>
+      <button class="btn secondary" id="force-update-btn">Tvinga fram senaste versionen</button>
     </div>
   </section>
 </main>

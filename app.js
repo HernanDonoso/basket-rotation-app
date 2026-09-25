@@ -1,6 +1,11 @@
 (function () {
   'use strict';
 
+  // Bump this on every deploy (kept in sync with sw.js CACHE version).
+  // Used to detect when the running page is stale compared to what's
+  // published on GitHub Pages — see checkForUpdate() below.
+  var APP_VERSION = '7';
+
   var DEFAULT_ROSTER = [
     { name: 'Adam', number: 9, level: 3 },
     { name: 'Albert', number: 18, level: 3 },
@@ -816,10 +821,61 @@
   renderSettings();
   persistAll();
 
-  // Register service worker for offline use (best effort, ignore failures)
+  var versionDisplay = document.getElementById('app-version-display');
+  if (versionDisplay) versionDisplay.textContent = APP_VERSION;
+
+  // ---------- Update detection ----------
+  // version.json is fetched with cache-busting so it always reflects what's
+  // actually published on GitHub Pages, even if the service worker or the
+  // browser's own HTTP cache is stubbornly holding onto old app.js/index.html.
+  // If the deployed version differs from what's currently running, show a
+  // banner rather than silently forcing a reload (avoids yanking the rug out
+  // from under a coach mid-match).
+  function checkForUpdate() {
+    fetch('version.json?_=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (data && String(data.version) !== String(APP_VERSION)) {
+          var banner = document.getElementById('update-banner');
+          if (banner) banner.style.display = 'block';
+        }
+      })
+      .catch(function () { /* offline or blocked — ignore, not critical */ });
+  }
+
+  function forceUpdate() {
+    var doReload = function () {
+      // Cache-bust the navigation itself so the browser can't serve a
+      // cached index.html even if the service worker is misbehaving.
+      window.location.href = window.location.pathname + '?_fresh=' + Date.now();
+    };
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations()
+        .then(function (regs) { return Promise.all(regs.map(function (r) { return r.unregister(); })); })
+        .then(function () { return 'caches' in window ? caches.keys() : []; })
+        .then(function (keys) { return Promise.all(keys.map(function (k) { return caches.delete(k); })); })
+        .then(doReload)
+        .catch(doReload);
+    } else {
+      doReload();
+    }
+  }
+
+  var updateBanner = document.getElementById('update-banner');
+  if (updateBanner) updateBanner.addEventListener('click', forceUpdate);
+  var forceUpdateBtn = document.getElementById('force-update-btn');
+  if (forceUpdateBtn) forceUpdateBtn.addEventListener('click', forceUpdate);
+
+  checkForUpdate();
+  setInterval(checkForUpdate, 5 * 60 * 1000); // re-check every 5 min while the app is open
+
+  // Register service worker for offline use (best effort, ignore failures).
+  // updateViaCache: 'none' stops the browser's own HTTP cache from serving a
+  // stale sw.js — otherwise the service worker itself could never notice a
+  // new version was deployed, defeating the whole update-check mechanism.
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {
-      navigator.serviceWorker.register('sw.js').catch(function () {});
+      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(function () {});
     });
   }
 })();
