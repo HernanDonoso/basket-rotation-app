@@ -15,7 +15,7 @@
     { name: 'James', number: 17, level: 7 },
     { name: 'Lev', number: 20, level: 7 },
     { name: 'Lucas', number: 25, level: 6 },
-    { name: 'Oscar', number: 23, level: 6 },
+    { name: 'Oscar', number: 23, level: 7 },
     { name: 'Philip', number: 17, level: 5 },
     { name: 'Sid', number: 8, level: 4 },
     { name: 'Theodoros', number: 20, level: 5 }
