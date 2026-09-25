@@ -7,7 +7,6 @@
     { name: 'Alexander', number: 21, level: 4 },
     { name: 'Alvar', number: 1, level: 4 },
     { name: 'Camilo', number: 18, level: 7 },
-    { name: 'Caesar', number: 3, level: 5 },
     { name: 'Charlie', number: 22, level: 6 },
     { name: 'Elis', number: 21, level: 7 },
     { name: 'Frank', number: 2, level: 7 },
