@@ -399,6 +399,21 @@
       <button class="btn secondary" id="save-settings-btn" style="margin-top:8px;">Spara inställningar</button>
     </div>
     <div class="card">
+      <h2>Rullande byten (jämnare speltid)</h2>
+      <div class="settings-grid">
+        <label for="set-rolling-enabled">Använd rullande byten istället för fasta 4-spelarbyten</label>
+        <input type="checkbox" id="set-rolling-enabled" />
+        <label for="set-rolling-interval">Kontrollintervall (minuter mellan bytesbeslut)</label>
+        <input type="number" id="set-rolling-interval" min="1" max="8" value="2" />
+      </div>
+      <p class="muted" style="margin-top:10px;">
+      Med rullande byten byts bara de spelare ut vars speltid faktiskt ligger efter
+      sitt mål — inte hela laget samtidigt. Ger jämnare speltid, särskilt tillsammans
+      med Speltidsbonus ovan. Kortare intervall (1-2 min) ger jämnast resultat men fler
+      bytestillfällen att hålla koll på; längre (3-4 min) ger färre byten men något
+      ojämnare speltid.</p>
+    </div>
+    <div class="card">
       <h2>Data</h2>
       <p class="muted">All data sparas bara i den här webbläsaren/telefonen (localStorage), ingen molnlagring.</p>
       <button class="btn secondary" id="reset-btn">Återställ trupp till standardlista</button>

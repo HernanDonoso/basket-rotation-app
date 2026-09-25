@@ -194,6 +194,193 @@ function generateSchedule(selectedPlayers, opts) {
   };
 }
 
+// Rolling substitution scheduler — instead of fixed all-4-swap shifts,
+// checks every `checkInterval` minutes whether individual players should
+// be swapped (only those "behind schedule" come off), to minimise the
+// spread in total playing time. Especially useful with a speltidsbonus,
+// where fixed 4-min shifts can only distribute bonus minutes in coarse
+// 4-min chunks (see matchrotation-app.md for background).
+function generateRollingSchedule(selectedPlayers, opts) {
+  opts = opts || {};
+  var totalMinutes = opts.totalMinutes || 32;
+  var onCourt = opts.onCourt || 4;
+  var checkInterval = opts.checkInterval || 2;
+  var margin = opts.margin === undefined ? 0.75 : opts.margin;
+  var lowThreshold = opts.lowThreshold === undefined ? 4 : opts.lowThreshold;
+  var lowMin = opts.lowMin === undefined ? 1 : opts.lowMin;
+  var lowMax = opts.lowMax === undefined ? 2 : opts.lowMax;
+  var weightThreshold = opts.weightThreshold === undefined ? 5 : opts.weightThreshold;
+  var weightBonusPercent = opts.weightBonusPercent === undefined ? 0 : opts.weightBonusPercent;
+  var attempts = opts.attempts || 60;
+
+  var n = selectedPlayers.length;
+  if (n < onCourt) {
+    return { ok: false, error: 'Behöver minst ' + onCourt + ' spelare valda, bara ' + n + ' valda.' };
+  }
+
+  var names = selectedPlayers.map(function (p) { return p.name; });
+  var isLow = {}, levelOf = {};
+  selectedPlayers.forEach(function (p) { isLow[p.name] = p.level <= lowThreshold; levelOf[p.name] = p.level; });
+
+  var lowCountTotal = selectedPlayers.filter(function (p) { return p.level <= lowThreshold; }).length;
+  var highCountTotal = n - lowCountTotal;
+  var precheckWarnings = [];
+  if (lowCountTotal === 0) {
+    precheckWarnings.push('Inga spelare med gradering 1-4 är valda idag — kan inte blanda in lägre graderade spelare alls.');
+  } else if (highCountTotal < onCourt - 2) {
+    precheckWarnings.push('Få spelare med gradering 5-10 valda (' + highCountTotal + ') — kan bli svårt att alltid ha minst 2 högre graderade per lag.');
+  }
+
+  var weightOf = {}, totalWeight = 0;
+  names.forEach(function (nm) {
+    var lvl = levelOf[nm];
+    weightOf[nm] = 1.0 + (lvl > weightThreshold ? weightBonusPercent / 100.0 : 0.0);
+    totalWeight += weightOf[nm];
+  });
+  var totalPlayerMinutes = onCourt * totalMinutes;
+  var targetMin = {};
+  names.forEach(function (nm) { targetMin[nm] = totalPlayerMinutes * weightOf[nm] / totalWeight; });
+
+  function mulberry32(seed) {
+    return function () {
+      seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+      var t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // Initial lineup: fill greedily by target minutes (most-owed first),
+  // respecting the low/high balance constraint from the start.
+  function pickInitialLineup(rng) {
+    var pool = names.slice().sort(function (a, b) {
+      var diff = targetMin[b] - targetMin[a];
+      if (Math.abs(diff) > 1e-9) return diff;
+      return rng() - 0.5;
+    });
+    var lineup = [], low = 0;
+    for (var i = 0; i < pool.length && lineup.length < onCourt; i++) {
+      var nm = pool[i];
+      var wouldBeLow = low + (isLow[nm] ? 1 : 0);
+      var slotsLeft = onCourt - lineup.length - 1;
+      // only take if it doesn't make low-count unreachable-in-range
+      if (isLow[nm] && wouldBeLow > lowMax) continue;
+      if (!isLow[nm] && (lineup.length - low) + 1 > (onCourt - lowMin)) continue;
+      lineup.push(nm);
+      if (isLow[nm]) low++;
+    }
+    if (lineup.length < onCourt) {
+      // relaxed fallback: just take the top N by target minutes
+      lineup = pool.slice(0, onCourt);
+    }
+    return lineup;
+  }
+
+  var best = null;
+
+  for (var attempt = 0; attempt < attempts; attempt++) {
+    var rng = mulberry32((opts.seed || 1) * 7919 + attempt * 104729);
+
+    var played = {}, stint = {};
+    names.forEach(function (nm) { played[nm] = 0; stint[nm] = 0; });
+
+    var onCourtSet = pickInitialLineup(rng);
+    onCourtSet.forEach(function (nm) { stint[nm] = 0; });
+
+    var segments = [];
+    var events = [];
+    var warnings = [];
+    var t = 0;
+    var minStint = Math.max(checkInterval, opts.minStint || checkInterval);
+
+    while (t < totalMinutes) {
+      var segLen = Math.min(checkInterval, totalMinutes - t);
+      segments.push({ startMin: t, endMin: t + segLen, lineup: onCourtSet.slice().sort() });
+      onCourtSet.forEach(function (nm) { played[nm] += segLen; stint[nm] += segLen; });
+
+      var lowCount = onCourtSet.filter(function (nm) { return isLow[nm]; }).length;
+      if (lowCount < lowMin || lowCount > lowMax) {
+        warnings.push('Min ' + t + '\u2013' + (t + segLen) + ': ' + lowCount +
+          ' lågt graderade på plan (mål ' + lowMin + '-' + lowMax + ') \u2014 ' + onCourtSet.slice().sort().join(', '));
+      }
+
+      t += segLen;
+      if (t >= totalMinutes) break;
+
+      var remaining = totalMinutes - t;
+      var deficit = {};
+      names.forEach(function (nm) { deficit[nm] = targetMin[nm] - played[nm]; });
+
+      // Greedy 1-for-1 swaps: swap the on-court player furthest ahead of
+      // schedule for the bench player furthest behind, as long as the gap
+      // clears `margin`, the on-court player has had a minimum stint, and
+      // the swap keeps the low/high balance intact.
+      var bench = names.filter(function (nm) { return onCourtSet.indexOf(nm) === -1; });
+      var curOnCourt = onCourtSet.slice();
+      var swapOut = [], swapIn = [];
+      var madeSwap = true;
+      while (madeSwap) {
+        madeSwap = false;
+        var eligibleOn = curOnCourt.filter(function (nm) { return stint[nm] >= minStint; });
+        var onSorted = eligibleOn.slice().sort(function (a, b) {
+          var diff = deficit[a] - deficit[b];
+          if (Math.abs(diff) > 1e-9) return diff;
+          return rng() - 0.5;
+        });
+        var benchSorted = bench.slice().sort(function (a, b) {
+          var diff = deficit[b] - deficit[a];
+          if (Math.abs(diff) > 1e-9) return diff;
+          return rng() - 0.5;
+        });
+        for (var oi = 0; oi < onSorted.length; oi++) {
+          var worstOn = onSorted[oi];
+          var picked = null;
+          for (var bi = 0; bi < benchSorted.length; bi++) {
+            var cand = benchSorted[bi];
+            if ((deficit[cand] - deficit[worstOn]) <= margin) break;
+            var trialLow = curOnCourt.filter(function (nm) { return nm !== worstOn && isLow[nm]; }).length + (isLow[cand] ? 1 : 0);
+            if (trialLow >= lowMin && trialLow <= lowMax) { picked = cand; break; }
+          }
+          if (picked) {
+            curOnCourt[curOnCourt.indexOf(worstOn)] = picked;
+            bench[bench.indexOf(picked)] = worstOn;
+            stint[picked] = 0;
+            swapOut.push(worstOn);
+            swapIn.push(picked);
+            madeSwap = true;
+            break;
+          }
+        }
+      }
+
+      if (swapOut.length) {
+        events.push({ atMinute: t, out: swapOut, in: swapIn });
+      }
+      onCourtSet = curOnCourt;
+    }
+
+    var vals = names.map(function (nm) { return played[nm]; });
+    var spread = Math.max.apply(null, vals) - Math.min.apply(null, vals);
+    var score = spread * 1000 + warnings.length;
+
+    if (best === null || score < best.score) {
+      best = { segments: segments, events: events, played: played, warnings: warnings, spread: spread, score: score };
+      if (spread <= 1 && warnings.length === 0) break;
+    }
+  }
+
+  return {
+    ok: true,
+    segments: best.segments,
+    events: best.events,
+    minutesPerPlayer: best.played,
+    warnings: precheckWarnings.concat(best.warnings),
+    spread: best.spread,
+    isLow: isLow,
+    levelOf: levelOf
+  };
+}
+
 if (typeof module !== 'undefined') {
-  module.exports = { generateSchedule: generateSchedule };
+  module.exports = { generateSchedule: generateSchedule, generateRollingSchedule: generateRollingSchedule };
 }

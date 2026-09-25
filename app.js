@@ -28,7 +28,9 @@
     lowMax: 2,
     levelSplit: 4,
     weightThreshold: 5,
-    weightBonusPercent: 0
+    weightBonusPercent: 0,
+    rollingEnabled: false,
+    rollingInterval: 2
   };
 
   var LS_ROSTER = 'basketRotation.roster.v1';
@@ -227,8 +229,26 @@
     }
 
     var levelOverride = state.settings.levelSplit;
-
     var seed = Date.now() % 100000;
+
+    if (state.settings.rollingEnabled) {
+      var totalMinutes = state.settings.shifts * state.settings.minutesPerShift;
+      var res = generateRollingSchedule(selectedPlayers, {
+        totalMinutes: totalMinutes,
+        onCourt: state.settings.onCourt,
+        checkInterval: state.settings.rollingInterval,
+        lowThreshold: levelOverride,
+        lowMax: state.settings.lowMax,
+        lowMin: 1,
+        weightThreshold: state.settings.weightThreshold,
+        weightBonusPercent: state.settings.weightBonusPercent,
+        seed: seed,
+        attempts: 60
+      });
+      renderRollingResult(res, selectedPlayers);
+      return;
+    }
+
     var res = generateSchedule(selectedPlayers, {
       shifts: state.settings.shifts,
       onCourt: state.settings.onCourt,
@@ -345,6 +365,136 @@
     resultArea.appendChild(summaryCard);
   }
 
+  function renderRollingResult(res, selectedPlayers) {
+    var resultArea = document.getElementById('result-area');
+    resultArea.innerHTML = '';
+
+    if (!res.ok) {
+      var err = document.createElement('div');
+      err.className = 'error-box';
+      err.textContent = res.error;
+      resultArea.appendChild(err);
+      return;
+    }
+
+    var levelByName = {};
+    selectedPlayers.forEach(function (p) { levelByName[p.name] = p.level; });
+    var lowSplit = state.settings.levelSplit;
+
+    var infoBox = document.createElement('div');
+    infoBox.className = 'warn-box';
+    infoBox.style.color = 'var(--accent2)';
+    infoBox.style.borderColor = 'rgba(251,146,60,0.35)';
+    infoBox.style.background = 'rgba(251,146,60,0.12)';
+    infoBox.textContent = 'Rullande byten aktiva: bara spelare som ligger efter sitt mål byts ut, ' +
+      'kontroll var ' + state.settings.rollingInterval + ':e minut. Spridning i speltid: ' +
+      res.spread + ' min mellan mest och minst spelad.';
+    resultArea.appendChild(infoBox);
+
+    if (state.settings.weightBonusPercent > 0) {
+      var bonusBox = document.createElement('div');
+      bonusBox.className = 'warn-box';
+      bonusBox.style.color = 'var(--accent2)';
+      bonusBox.style.borderColor = 'rgba(251,146,60,0.35)';
+      bonusBox.style.background = 'rgba(251,146,60,0.12)';
+      bonusBox.textContent = 'Speltidsbonus aktiv: spelare med coachbetyg över ' +
+        state.settings.weightThreshold + ' får ~' + state.settings.weightBonusPercent +
+        '% mer speltid än övriga (avviker från helt jämn fördelning).';
+      resultArea.appendChild(bonusBox);
+    }
+
+    if (res.warnings && res.warnings.length) {
+      var warnBox = document.createElement('div');
+      warnBox.className = 'warn-box';
+      warnBox.innerHTML = '<strong>Obs:</strong><br>' + res.warnings.map(function (w) {
+        return '• ' + escapeHtml(w);
+      }).join('<br>');
+      resultArea.appendChild(warnBox);
+    }
+
+    // Substitution events timeline
+    var eventsCard = document.createElement('div');
+    eventsCard.className = 'card';
+    var eh2 = document.createElement('h2');
+    eh2.textContent = 'Byten under matchen';
+    eventsCard.appendChild(eh2);
+    if (res.events.length === 0) {
+      var noEv = document.createElement('p');
+      noEv.className = 'muted';
+      noEv.textContent = 'Inga byten behövdes — samma startfem spelar hela matchen.';
+      eventsCard.appendChild(noEv);
+    } else {
+      res.events.forEach(function (ev) {
+        var row = document.createElement('div');
+        row.className = 'row';
+        var span = document.createElement('span');
+        span.className = 'name';
+        span.textContent = 'Min ' + ev.atMinute + ': UT ' + ev.out.join(', ') + '  →  IN ' + ev.in.join(', ');
+        row.appendChild(span);
+        eventsCard.appendChild(row);
+      });
+    }
+    resultArea.appendChild(eventsCard);
+
+    // Full lineup timeline
+    res.segments.forEach(function (seg) {
+      var card = document.createElement('div');
+      card.className = 'shift-card';
+
+      var title = document.createElement('div');
+      title.className = 'shift-title';
+      title.innerHTML = '<span>Period</span><span>' + seg.startMin + '–' + seg.endMin + ' min</span>';
+      card.appendChild(title);
+
+      var grid = document.createElement('div');
+      grid.className = 'lineup-grid';
+      seg.lineup.forEach(function (name) {
+        var lvl = levelByName[name];
+        var isLow = lvl <= lowSplit;
+        var pdiv = document.createElement('div');
+        pdiv.className = 'lineup-player';
+        var nameSpan = document.createElement('span');
+        nameSpan.textContent = name;
+        var badge = document.createElement('span');
+        badge.className = 'level-badge ' + (isLow ? 'level-low' : 'level-high');
+        badge.textContent = lvl;
+        pdiv.appendChild(nameSpan);
+        pdiv.appendChild(badge);
+        grid.appendChild(pdiv);
+      });
+      card.appendChild(grid);
+      resultArea.appendChild(card);
+    });
+
+    // Summary table
+    var summaryCard = document.createElement('div');
+    summaryCard.className = 'card';
+    var h2 = document.createElement('h2');
+    h2.textContent = 'Speltid per spelare';
+    summaryCard.appendChild(h2);
+
+    var table = document.createElement('table');
+    table.className = 'summary';
+    var thead = document.createElement('thead');
+    thead.innerHTML = '<tr><th>Spelare</th><th>Grad</th><th>Minuter</th></tr>';
+    table.appendChild(thead);
+    var tbody = document.createElement('tbody');
+
+    var names = Object.keys(res.minutesPerPlayer).sort(function (a, b) {
+      return res.minutesPerPlayer[b] - res.minutesPerPlayer[a];
+    });
+    names.forEach(function (nm) {
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + escapeHtml(nm) + '</td>' +
+        '<td>' + levelByName[nm] + '</td>' +
+        '<td>' + res.minutesPerPlayer[nm] + ' min</td>';
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    summaryCard.appendChild(table);
+    resultArea.appendChild(summaryCard);
+  }
+
   function escapeHtml(s) {
     var d = document.createElement('div');
     d.textContent = s;
@@ -360,6 +510,8 @@
     document.getElementById('set-levelsplit').value = state.settings.levelSplit;
     document.getElementById('set-weight-threshold').value = state.settings.weightThreshold;
     document.getElementById('set-weight-bonus').value = state.settings.weightBonusPercent;
+    document.getElementById('set-rolling-enabled').checked = state.settings.rollingEnabled;
+    document.getElementById('set-rolling-interval').value = state.settings.rollingInterval;
   }
 
   document.getElementById('save-settings-btn').addEventListener('click', function () {
@@ -370,6 +522,8 @@
     state.settings.levelSplit = clampInt(document.getElementById('set-levelsplit').value, 1, 9, 4);
     state.settings.weightThreshold = clampInt(document.getElementById('set-weight-threshold').value, 1, 10, 5);
     state.settings.weightBonusPercent = clampInt(document.getElementById('set-weight-bonus').value, 0, 100, 0);
+    state.settings.rollingEnabled = document.getElementById('set-rolling-enabled').checked;
+    state.settings.rollingInterval = clampInt(document.getElementById('set-rolling-interval').value, 1, 8, 2);
     persistAll();
     renderSettings();
     renderMatchday();
