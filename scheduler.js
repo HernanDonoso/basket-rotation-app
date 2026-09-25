@@ -62,10 +62,18 @@ function generateSchedule(selectedPlayers, opts) {
     names.forEach(function (nm) { floorQ[nm] = Math.floor(ideal[nm]); });
     var assigned = names.reduce(function (sum, nm) { return sum + floorQ[nm]; }, 0);
     var remainder = totalSlots - assigned;
-    // sort by fractional remainder desc, tie-break with rng for variety across matches
+    // Sort by fractional remainder desc. When players are tied on the
+    // fractional remainder (typical: they share the same weight class,
+    // e.g. all above the coachbetyg threshold), break the tie by actual
+    // level (higher level wins the "extra" slot first) instead of pure
+    // randomness — otherwise a level-5 player could beat a level-7 player
+    // to a bonus slot purely by luck, undermining the whole point of the
+    // speltidsbonus. Only fall back to rng when levels are ALSO tied.
     var order = names.slice().sort(function (a, b) {
       var diff = (ideal[b] - floorQ[b]) - (ideal[a] - floorQ[a]);
       if (Math.abs(diff) > 1e-9) return diff;
+      var levelDiff = levelOf[b] - levelOf[a];
+      if (levelDiff !== 0) return levelDiff;
       return rng() - 0.5;
     });
     for (var i = 0; i < remainder; i++) {

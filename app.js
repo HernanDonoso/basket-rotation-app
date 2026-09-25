@@ -4,7 +4,7 @@
   // Bump this on every deploy (kept in sync with sw.js CACHE version).
   // Used to detect when the running page is stale compared to what's
   // published on GitHub Pages — see checkForUpdate() below.
-  var APP_VERSION = '7';
+  var APP_VERSION = '8';
 
   var DEFAULT_ROSTER = [
     { name: 'Adam', number: 9, level: 3 },
