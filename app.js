@@ -4,7 +4,7 @@
   // Bump this on every deploy (kept in sync with sw.js CACHE version).
   // Used to detect when the running page is stale compared to what's
   // published on GitHub Pages — see checkForUpdate() below.
-  var APP_VERSION = '9';
+  var APP_VERSION = '10';
 
   var DEFAULT_ROSTER = [
     { name: 'Adam', number: 9, level: 3 },
@@ -30,6 +30,7 @@
     shifts: 8,
     onCourt: 4,
     minutesPerShift: 4,
+    periodMinutes: 8,
     lowMax: 2,
     levelSplit: 4,
     weightThreshold: 5,
@@ -258,6 +259,7 @@
       shifts: state.settings.shifts,
       onCourt: state.settings.onCourt,
       minutesPerShift: state.settings.minutesPerShift,
+      shiftsPerPeriod: Math.max(1, Math.round(state.settings.periodMinutes / state.settings.minutesPerShift)),
       lowThreshold: levelOverride,
       lowMax: state.settings.lowMax,
       lowMin: 1,
@@ -511,6 +513,7 @@
     document.getElementById('set-shifts').value = state.settings.shifts;
     document.getElementById('set-oncourt').value = state.settings.onCourt;
     document.getElementById('set-minutes').value = state.settings.minutesPerShift;
+    document.getElementById('set-period-minutes').value = state.settings.periodMinutes;
     document.getElementById('set-lowmax').value = state.settings.lowMax;
     document.getElementById('set-levelsplit').value = state.settings.levelSplit;
     document.getElementById('set-weight-threshold').value = state.settings.weightThreshold;
@@ -523,6 +526,7 @@
     state.settings.shifts = clampInt(document.getElementById('set-shifts').value, 1, 20, 8);
     state.settings.onCourt = clampInt(document.getElementById('set-oncourt').value, 2, 10, 4);
     state.settings.minutesPerShift = clampInt(document.getElementById('set-minutes').value, 1, 20, 4);
+    state.settings.periodMinutes = clampInt(document.getElementById('set-period-minutes').value, 1, 40, 8);
     state.settings.lowMax = clampInt(document.getElementById('set-lowmax').value, 0, 4, 2);
     state.settings.levelSplit = clampInt(document.getElementById('set-levelsplit').value, 1, 9, 4);
     state.settings.weightThreshold = clampInt(document.getElementById('set-weight-threshold').value, 1, 10, 5);

@@ -19,6 +19,12 @@ function generateSchedule(selectedPlayers, opts) {
   var lowThreshold = opts.lowThreshold === undefined ? 4 : opts.lowThreshold;
   var weightThreshold = opts.weightThreshold === undefined ? 5 : opts.weightThreshold;
   var weightBonusPercent = opts.weightBonusPercent === undefined ? 0 : opts.weightBonusPercent;
+  // Number of shifts that make up one match period (e.g. 2 shifts of 4 min
+  // = one 8-min period). "Avoid repeat" only applies WITHIN a period — a
+  // player who closes period 1 is free to open period 2 immediately, since
+  // that's a real, visible substitution break for the coach/players, not a
+  // same-period leave-and-return. Set to 1 to disable the rule entirely.
+  var shiftsPerPeriod = opts.shiftsPerPeriod || 2;
 
   var n = selectedPlayers.length;
   if (n < onCourt) {
@@ -115,13 +121,17 @@ function generateSchedule(selectedPlayers, opts) {
       var lineupSet = {};
       forced.forEach(function (nm) { lineupSet[nm] = true; });
 
-      // Avoid playing the same player two shifts in a row when possible —
-      // prefer candidates who were NOT on court last shift; only fall back
-      // to allowing a repeat if no valid lineup can be built otherwise
-      // (e.g. a player's remaining quota forces them to play again).
-      var prevLineup = schedule.length ? schedule[schedule.length - 1] : [];
+      // Avoid playing the same player twice within the same match period
+      // (e.g. both 4-min shifts inside one 8-min period) when possible —
+      // prefer candidates who haven't played yet THIS period; a repeat
+      // across a period boundary (last shift of period N, first of N+1) is
+      // fine and not restricted. Only fall back to allowing a same-period
+      // repeat if no valid lineup can otherwise meet the speltidsmål.
+      var periodStart = Math.floor(s / shiftsPerPeriod) * shiftsPerPeriod;
       var prevSet = {};
-      prevLineup.forEach(function (nm) { prevSet[nm] = true; });
+      for (var pi = periodStart; pi < s; pi++) {
+        schedule[pi].forEach(function (nm) { prevSet[nm] = true; });
+      }
 
       var remainingCandidates = available.filter(function (nm) { return !lineupSet[nm]; });
       remainingCandidates.sort(function (a, b) {
@@ -220,7 +230,7 @@ function generateSchedule(selectedPlayers, opts) {
     schedule: best.schedule,
     warnings: precheckWarnings.concat(best.warnings.map(function (w) {
       if (w.type === 'consecutive') {
-        return 'Byte ' + w.shift + ': ' + w.repeats.join(', ') + ' spelar två byten i rad (kunde inte undvikas givet speltidsmålen).';
+        return 'Byte ' + w.shift + ': ' + w.repeats.join(', ') + ' spelar två byten i samma period (kunde inte undvikas givet speltidsmålen).';
       }
       return 'Byte ' + w.shift + ': kunde inte hålla ' + lowMin + '-' + lowMax + ' lågt graderade spelare (blev ' + w.lowCount + ') — ' + w.lineup.join(', ');
     })),
