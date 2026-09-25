@@ -107,24 +107,57 @@ function generateSchedule(selectedPlayers, opts) {
       var lineupSet = {};
       forced.forEach(function (nm) { lineupSet[nm] = true; });
 
-      var candidates = available.filter(function (nm) { return !lineupSet[nm]; });
-      candidates.sort(function (a, b) {
+      // Avoid playing the same player two shifts in a row when possible —
+      // prefer candidates who were NOT on court last shift; only fall back
+      // to allowing a repeat if no valid lineup can be built otherwise
+      // (e.g. a player's remaining quota forces them to play again).
+      var prevLineup = schedule.length ? schedule[schedule.length - 1] : [];
+      var prevSet = {};
+      prevLineup.forEach(function (nm) { prevSet[nm] = true; });
+
+      var remainingCandidates = available.filter(function (nm) { return !lineupSet[nm]; });
+      remainingCandidates.sort(function (a, b) {
         var ua = remainingQuota[a] / shiftsLeft;
         var ub = remainingQuota[b] / shiftsLeft;
         if (ub !== ua) return ub - ua;
         return rng() - 0.5;
       });
+      var preferredCandidates = remainingCandidates.filter(function (nm) { return !prevSet[nm]; });
 
       var slotsLeft = onCourt - Object.keys(lineupSet).length;
       var curLow = Object.keys(lineupSet).filter(function (nm) { return isLow[nm]; }).length;
       var curHigh = Object.keys(lineupSet).length - curLow;
 
-      // backtracking: try to satisfy 1<=low<=2 strictly
-      var solved = backtrack(0, Object.assign({}, lineupSet), curLow, curHigh, slotsLeft, true);
+      function backtrackWith(candList, strictLowHigh) {
+        function bt(idx, curSet, low, high, left) {
+          if (left === 0) {
+            if (!strictLowHigh) return curSet;
+            if (low >= lowMin && low <= lowMax) return curSet;
+            return null;
+          }
+          if (idx >= candList.length) return null;
+          var nm = candList[idx];
+          var newLow = low + (isLow[nm] ? 1 : 0);
+          var newHigh = high + (isLow[nm] ? 0 : 1);
+          if (!strictLowHigh || newLow <= lowMax) {
+            var withInc = Object.assign({}, curSet);
+            withInc[nm] = true;
+            var res = bt(idx + 1, withInc, newLow, newHigh, left - 1);
+            if (res) return res;
+          }
+          return bt(idx + 1, curSet, low, high, left);
+        }
+        return bt(0, Object.assign({}, lineupSet), curLow, curHigh, slotsLeft);
+      }
+
+      // Pass 1: no consecutive repeats, strict low/high mix
+      var solved = backtrackWith(preferredCandidates, true);
+      // Pass 2: allow repeats if unavoidable, still strict low/high mix
+      if (!solved) solved = backtrackWith(remainingCandidates, true);
       var relaxedUsed = false;
+      // Pass 3: allow repeats AND relax low/high mix as last resort
       if (!solved) {
-        // relax: allow any low count, just fill by urgency
-        solved = backtrack(0, Object.assign({}, lineupSet), curLow, curHigh, slotsLeft, false);
+        solved = backtrackWith(remainingCandidates, false);
         relaxedUsed = true;
       }
       if (!solved) {
@@ -134,33 +167,16 @@ function generateSchedule(selectedPlayers, opts) {
 
       var finalLineup = Object.keys(solved);
       var finalLow = finalLineup.filter(function (nm) { return isLow[nm]; }).length;
+      var repeats = finalLineup.filter(function (nm) { return prevSet[nm]; });
       if (relaxedUsed || finalLow < lowMin || finalLow > lowMax) {
-        shiftWarnings.push({ shift: s + 1, lineup: finalLineup.slice(), lowCount: finalLow });
+        shiftWarnings.push({ shift: s + 1, lineup: finalLineup.slice(), lowCount: finalLow, type: 'lowhigh' });
+      }
+      if (repeats.length > 0) {
+        shiftWarnings.push({ shift: s + 1, lineup: finalLineup.slice(), repeats: repeats, type: 'consecutive' });
       }
 
       finalLineup.forEach(function (nm) { remainingQuota[nm] -= 1; });
       schedule.push(finalLineup.sort());
-
-      function backtrack(idx, curSet, low, high, left, strict) {
-        if (left === 0) {
-          if (!strict) return curSet;
-          if (low >= lowMin && low <= lowMax) return curSet;
-          return null;
-        }
-        if (idx >= candidates.length) return null;
-        var nm = candidates[idx];
-        // include
-        var newLow = low + (isLow[nm] ? 1 : 0);
-        var newHigh = high + (isLow[nm] ? 0 : 1);
-        if (!strict || newLow <= lowMax) {
-          var withInc = Object.assign({}, curSet);
-          withInc[nm] = true;
-          var res = backtrack(idx + 1, withInc, newLow, newHigh, left - 1, strict);
-          if (res) return res;
-        }
-        // exclude
-        return backtrack(idx + 1, curSet, low, high, left, strict);
-      }
     }
 
     if (!feasible) continue;
@@ -186,7 +202,10 @@ function generateSchedule(selectedPlayers, opts) {
     ok: true,
     schedule: best.schedule,
     warnings: precheckWarnings.concat(best.warnings.map(function (w) {
-      return 'Byte ' + w.shift + ': kunde inte hålla 1-2 lågt graderade spelare (blev ' + w.lowCount + ') — ' + w.lineup.join(', ');
+      if (w.type === 'consecutive') {
+        return 'Byte ' + w.shift + ': ' + w.repeats.join(', ') + ' spelar två byten i rad (kunde inte undvikas givet speltidsmålen).';
+      }
+      return 'Byte ' + w.shift + ': kunde inte hålla ' + lowMin + '-' + lowMax + ' lågt graderade spelare (blev ' + w.lowCount + ') — ' + w.lineup.join(', ');
     })),
     minutesPerPlayer: minutesPerPlayer,
     isLow: isLow,
