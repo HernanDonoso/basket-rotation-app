@@ -122,6 +122,27 @@
   }
   .level-low { background: rgba(248,113,113,0.18); color: var(--low); }
   .level-high { background: rgba(74,222,128,0.18); color: var(--high); }
+  button.height-toggle {
+    min-width: 48px;
+    text-align: center;
+    padding: 6px 8px;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    border: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .height-long { background: rgba(56,189,248,0.18); color: #38bdf8; border-color: rgba(56,189,248,0.35); }
+  .height-short { background: rgba(148,163,184,0.18); color: var(--muted); border-color: var(--border); }
+  span.height-badge {
+    display: inline-block;
+    min-width: 20px;
+    text-align: center;
+    padding: 3px 6px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
   button.icon-btn {
     background: none;
     border: none;
@@ -350,7 +371,9 @@
   <section id="view-squad" class="view active">
     <div class="card">
       <h2>Spelartrupp</h2>
-      <p class="muted">Gradering 1-10 styr hur laguppsättningen blandas. 1-4 = lägre, 5-10 = högre.</p>
+      <p class="muted">Gradering 1-10 styr hur laguppsättningen blandas. 1-4 = lägre, 5-10 = högre.
+      Längd (Lång/Kort) styr att varje lag på plan får minst en lång spelare — tryck på knappen
+      för att växla.</p>
       <div id="squad-list"></div>
       <div class="add-row">
         <input type="text" id="new-name" class="name-input" placeholder="Nytt spelarnamn" />
@@ -415,6 +438,8 @@
         <input type="number" id="set-weight-bonus" min="0" max="100" value="0" />
         <label for="set-floor-threshold">Golv-tröskel (betyg ≤ detta = garanterat minst speltid)</label>
         <input type="number" id="set-floor-threshold" min="1" max="9" value="3" />
+        <label for="set-minlong">Minst antal långa spelare per lag på plan</label>
+        <input type="number" id="set-minlong" min="0" max="4" value="1" />
       </div>
       <p class="muted" style="margin-top:10px;">Standard matchar U13-reglerna: 4×8 min, 4 mot 4, byte var 4:e minut.
       Ändra bara om era matchregler skiljer sig.</p>
@@ -460,8 +485,8 @@
 
 <p class="footer-note">Sparas lokalt i webbläsaren. Ingen inloggning, ingen server.</p>
 
-<script src="scheduler.js?v=12"></script>
-<script src="profixio-import.js?v=12"></script>
-<script src="app.js?v=12"></script>
+<script src="scheduler.js?v=13"></script>
+<script src="profixio-import.js?v=13"></script>
+<script src="app.js?v=13"></script>
 </body>
 </html>

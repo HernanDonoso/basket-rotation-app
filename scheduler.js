@@ -25,6 +25,10 @@ function generateSchedule(selectedPlayers, opts) {
   // (floorThreshold must be strictly below weightThreshold).
   var floorThreshold = opts.floorThreshold === undefined ? 3 : opts.floorThreshold;
   if (floorThreshold >= weightThreshold) floorThreshold = weightThreshold - 1;
+  // Minimum number of "long" (tall) graded players required on court per
+  // shift — soft constraint like the low/high mix above: satisfied whenever
+  // possible, otherwise the shift is flagged with a warning.
+  var minLong = opts.minLong === undefined ? 1 : opts.minLong;
   // Number of shifts that make up one match period (e.g. 2 shifts of 4 min
   // = one 8-min period). "Avoid repeat" only applies WITHIN a period — a
   // player who closes period 1 is free to open period 2 immediately, since
@@ -39,18 +43,28 @@ function generateSchedule(selectedPlayers, opts) {
 
   var isLow = {};
   var levelOf = {};
+  var isTall = {};
+  var heightOf = {};
   selectedPlayers.forEach(function (p) {
     isLow[p.name] = p.level <= lowThreshold;
     levelOf[p.name] = p.level;
+    isTall[p.name] = p.height === 'long';
+    heightOf[p.name] = p.height === 'long' ? 'long' : 'short';
   });
   var lowCountTotal = selectedPlayers.filter(function (p) { return p.level <= lowThreshold; }).length;
   var highCountTotal = n - lowCountTotal;
+  var tallCountTotal = selectedPlayers.filter(function (p) { return p.height === 'long'; }).length;
 
   var precheckWarnings = [];
   if (lowCountTotal === 0) {
     precheckWarnings.push('Inga spelare med gradering 1-4 är valda idag — kan inte blanda in lägre graderade spelare alls.');
   } else if (highCountTotal < onCourt - 2) {
     precheckWarnings.push('Få spelare med gradering 5-10 valda (' + highCountTotal + ') — kan bli svårt att alltid ha minst 2 högre graderade per lag.');
+  }
+  if (minLong > 0 && tallCountTotal === 0) {
+    precheckWarnings.push('Inga långa spelare är valda idag — kan inte garantera minst ' + minLong + ' lång spelare per lag.');
+  } else if (minLong > 0 && tallCountTotal < minLong) {
+    precheckWarnings.push('Bara ' + tallCountTotal + ' lång spelare vald(a) — kan bli svårt att alltid ha minst ' + minLong + ' lång spelare per lag utan upprepningar.');
   }
 
   var totalSlots = shifts * onCourt;
@@ -197,47 +211,57 @@ function generateSchedule(selectedPlayers, opts) {
       var slotsLeft = onCourt - Object.keys(lineupSet).length;
       var curLow = Object.keys(lineupSet).filter(function (nm) { return isLow[nm]; }).length;
       var curHigh = Object.keys(lineupSet).length - curLow;
+      var curTall = Object.keys(lineupSet).filter(function (nm) { return isTall[nm]; }).length;
 
-      function backtrackWith(candList, strictLowHigh) {
-        function bt(idx, curSet, low, high, left) {
+      function backtrackWith(candList, strictLowHigh, strictLong) {
+        function bt(idx, curSet, low, high, tall, left) {
           if (left === 0) {
-            if (!strictLowHigh) return curSet;
-            if (low >= lowMin && low <= lowMax) return curSet;
-            return null;
+            if (strictLowHigh && !(low >= lowMin && low <= lowMax)) return null;
+            if (strictLong && tall < minLong) return null;
+            return curSet;
           }
           if (idx >= candList.length) return null;
           var nm = candList[idx];
           var newLow = low + (isLow[nm] ? 1 : 0);
           var newHigh = high + (isLow[nm] ? 0 : 1);
+          var newTall = tall + (isTall[nm] ? 1 : 0);
           if (!strictLowHigh || newLow <= lowMax) {
             var withInc = Object.assign({}, curSet);
             withInc[nm] = true;
-            var res = bt(idx + 1, withInc, newLow, newHigh, left - 1);
+            var res = bt(idx + 1, withInc, newLow, newHigh, newTall, left - 1);
             if (res) return res;
           }
-          return bt(idx + 1, curSet, low, high, left);
+          return bt(idx + 1, curSet, low, high, tall, left);
         }
-        return bt(0, Object.assign({}, lineupSet), curLow, curHigh, slotsLeft);
+        return bt(0, Object.assign({}, lineupSet), curLow, curHigh, curTall, slotsLeft);
       }
 
       // Priority order when constraints conflict: avoiding a player playing
       // two shifts in a row matters more to the coach than the low/high mix
-      // (mix violations are still flagged, just tolerated further down the
-      // list). Pass order:
-      //   1. no repeat,    strict mix
-      //   2. no repeat,    relaxed mix   <- prefer no-repeat over strict mix
-      //   3. repeat OK,    strict mix
-      //   4. repeat OK,    relaxed mix   (last resort, always succeeds if any exists)
-      var solved = backtrackWith(preferredCandidates, true);
+      // or the long-player requirement (all are still flagged as warnings
+      // when relaxed, just tolerated further down the priority list).
+      // Pass order (first that succeeds wins):
+      //   1. no repeat,  strict mix, strict long
+      //   2. no repeat,  strict mix, relaxed long
+      //   3. no repeat,  relaxed mix, strict long
+      //   4. no repeat,  relaxed mix, relaxed long
+      //   5. repeat OK,  strict mix, strict long
+      //   6. repeat OK,  strict mix, relaxed long
+      //   7. repeat OK,  relaxed mix, strict long
+      //   8. repeat OK,  relaxed mix, relaxed long (last resort, always succeeds if any exists)
+      var solved = backtrackWith(preferredCandidates, true, true);
       var relaxedUsed = false;
+      var longRelaxedUsed = false;
+      if (!solved) { solved = backtrackWith(preferredCandidates, true, false); if (solved) longRelaxedUsed = true; }
+      if (!solved) { solved = backtrackWith(preferredCandidates, false, true); if (solved) relaxedUsed = true; }
+      if (!solved) { solved = backtrackWith(preferredCandidates, false, false); if (solved) { relaxedUsed = true; longRelaxedUsed = true; } }
+      if (!solved) solved = backtrackWith(remainingCandidates, true, true);
+      if (!solved) { solved = backtrackWith(remainingCandidates, true, false); if (solved) longRelaxedUsed = true; }
+      if (!solved) { solved = backtrackWith(remainingCandidates, false, true); if (solved) relaxedUsed = true; }
       if (!solved) {
-        solved = backtrackWith(preferredCandidates, false);
-        relaxedUsed = !!solved;
-      }
-      if (!solved) solved = backtrackWith(remainingCandidates, true);
-      if (!solved) {
-        solved = backtrackWith(remainingCandidates, false);
+        solved = backtrackWith(remainingCandidates, false, false);
         relaxedUsed = true;
+        longRelaxedUsed = true;
       }
       if (!solved) {
         feasible = false;
@@ -246,9 +270,13 @@ function generateSchedule(selectedPlayers, opts) {
 
       var finalLineup = Object.keys(solved);
       var finalLow = finalLineup.filter(function (nm) { return isLow[nm]; }).length;
+      var finalTall = finalLineup.filter(function (nm) { return isTall[nm]; }).length;
       var repeats = finalLineup.filter(function (nm) { return prevSet[nm]; });
       if (relaxedUsed || finalLow < lowMin || finalLow > lowMax) {
         shiftWarnings.push({ shift: s + 1, lineup: finalLineup.slice(), lowCount: finalLow, type: 'lowhigh' });
+      }
+      if (minLong > 0 && (longRelaxedUsed || finalTall < minLong)) {
+        shiftWarnings.push({ shift: s + 1, lineup: finalLineup.slice(), tallCount: finalTall, type: 'height' });
       }
       if (repeats.length > 0) {
         shiftWarnings.push({ shift: s + 1, lineup: finalLineup.slice(), repeats: repeats, type: 'consecutive' });
@@ -281,6 +309,9 @@ function generateSchedule(selectedPlayers, opts) {
     if (w.type === 'consecutive') {
       return 'Byte ' + w.shift + ': ' + w.repeats.join(', ') + ' spelar två byten i samma period (kunde inte undvikas givet speltidsmålen).';
     }
+    if (w.type === 'height') {
+      return 'Byte ' + w.shift + ': kunde inte få med minst ' + minLong + ' lång spelare (blev ' + w.tallCount + ') — ' + w.lineup.join(', ');
+    }
     return 'Byte ' + w.shift + ': kunde inte hålla ' + lowMin + '-' + lowMax + ' lågt graderade spelare (blev ' + w.lowCount + ') — ' + w.lineup.join(', ');
   }));
   if (best.quotaResult.unresolved) {
@@ -298,7 +329,9 @@ function generateSchedule(selectedPlayers, opts) {
     warnings: finalWarnings,
     minutesPerPlayer: minutesPerPlayer,
     isLow: isLow,
-    levelOf: levelOf
+    levelOf: levelOf,
+    isTall: isTall,
+    heightOf: heightOf
   };
 }
 
@@ -319,6 +352,7 @@ function generateRollingSchedule(selectedPlayers, opts) {
   var lowMax = opts.lowMax === undefined ? 2 : opts.lowMax;
   var weightThreshold = opts.weightThreshold === undefined ? 5 : opts.weightThreshold;
   var weightBonusPercent = opts.weightBonusPercent === undefined ? 0 : opts.weightBonusPercent;
+  var minLong = opts.minLong === undefined ? 1 : opts.minLong;
   var attempts = opts.attempts || 60;
 
   var n = selectedPlayers.length;
@@ -328,15 +362,27 @@ function generateRollingSchedule(selectedPlayers, opts) {
 
   var names = selectedPlayers.map(function (p) { return p.name; });
   var isLow = {}, levelOf = {};
-  selectedPlayers.forEach(function (p) { isLow[p.name] = p.level <= lowThreshold; levelOf[p.name] = p.level; });
+  var isTall = {}, heightOf = {};
+  selectedPlayers.forEach(function (p) {
+    isLow[p.name] = p.level <= lowThreshold;
+    levelOf[p.name] = p.level;
+    isTall[p.name] = p.height === 'long';
+    heightOf[p.name] = p.height === 'long' ? 'long' : 'short';
+  });
 
   var lowCountTotal = selectedPlayers.filter(function (p) { return p.level <= lowThreshold; }).length;
   var highCountTotal = n - lowCountTotal;
+  var tallCountTotal = selectedPlayers.filter(function (p) { return p.height === 'long'; }).length;
   var precheckWarnings = [];
   if (lowCountTotal === 0) {
     precheckWarnings.push('Inga spelare med gradering 1-4 är valda idag — kan inte blanda in lägre graderade spelare alls.');
   } else if (highCountTotal < onCourt - 2) {
     precheckWarnings.push('Få spelare med gradering 5-10 valda (' + highCountTotal + ') — kan bli svårt att alltid ha minst 2 högre graderade per lag.');
+  }
+  if (minLong > 0 && tallCountTotal === 0) {
+    precheckWarnings.push('Inga långa spelare är valda idag — kan inte garantera minst ' + minLong + ' lång spelare per lag.');
+  } else if (minLong > 0 && tallCountTotal < minLong) {
+    precheckWarnings.push('Bara ' + tallCountTotal + ' lång spelare vald(a) — kan bli svårt att alltid ha minst ' + minLong + ' lång spelare per lag utan upprepningar.');
   }
 
   var weightOf = {}, totalWeight = 0;
@@ -381,6 +427,31 @@ function generateRollingSchedule(selectedPlayers, opts) {
       // relaxed fallback: just take the top N by target minutes
       lineup = pool.slice(0, onCourt);
     }
+    // Best-effort: if the greedy fill produced zero "long" (tall) players,
+    // swap in the most-deserving bench tall player for the least-deserving
+    // lineup player, as long as the low/high balance still holds.
+    if (minLong > 0 && lineup.filter(function (nm) { return isTall[nm]; }).length < minLong) {
+      var tallBench = pool.filter(function (nm) {
+        return isTall[nm] && lineup.indexOf(nm) === -1;
+      });
+      for (var ti = 0; ti < tallBench.length; ti++) {
+        var candidate = tallBench[ti];
+        var removable = lineup.slice().sort(function (a, b) { return targetMin[a] - targetMin[b]; });
+        var swapped = false;
+        for (var ri = 0; ri < removable.length; ri++) {
+          var victim = removable[ri];
+          if (victim === candidate) continue;
+          var trial = lineup.filter(function (nm) { return nm !== victim; }).concat([candidate]);
+          var trialLow = trial.filter(function (nm) { return isLow[nm]; }).length;
+          if (trialLow >= lowMin && trialLow <= lowMax) {
+            lineup = trial;
+            swapped = true;
+            break;
+          }
+        }
+        if (swapped && lineup.filter(function (nm) { return isTall[nm]; }).length >= minLong) break;
+      }
+    }
     return lineup;
   }
 
@@ -410,6 +481,11 @@ function generateRollingSchedule(selectedPlayers, opts) {
       if (lowCount < lowMin || lowCount > lowMax) {
         warnings.push('Min ' + t + '\u2013' + (t + segLen) + ': ' + lowCount +
           ' lågt graderade på plan (mål ' + lowMin + '-' + lowMax + ') \u2014 ' + onCourtSet.slice().sort().join(', '));
+      }
+      var tallCount = onCourtSet.filter(function (nm) { return isTall[nm]; }).length;
+      if (minLong > 0 && tallCount < minLong) {
+        warnings.push('Min ' + t + '\u2013' + (t + segLen) + ': ' + tallCount +
+          ' lång(a) spelare på plan (mål minst ' + minLong + ') \u2014 ' + onCourtSet.slice().sort().join(', '));
       }
 
       t += segLen;
@@ -447,7 +523,12 @@ function generateRollingSchedule(selectedPlayers, opts) {
             var cand = benchSorted[bi];
             if ((deficit[cand] - deficit[worstOn]) <= margin) break;
             var trialLow = curOnCourt.filter(function (nm) { return nm !== worstOn && isLow[nm]; }).length + (isLow[cand] ? 1 : 0);
-            if (trialLow >= lowMin && trialLow <= lowMax) { picked = cand; break; }
+            if (trialLow < lowMin || trialLow > lowMax) continue;
+            var curTallCount = curOnCourt.filter(function (nm) { return isTall[nm]; }).length;
+            var wouldLoseLastTall = minLong > 0 && isTall[worstOn] && curTallCount <= minLong && !isTall[cand];
+            if (wouldLoseLastTall) continue;
+            picked = cand;
+            break;
           }
           if (picked) {
             curOnCourt[curOnCourt.indexOf(worstOn)] = picked;
@@ -485,7 +566,9 @@ function generateRollingSchedule(selectedPlayers, opts) {
     warnings: precheckWarnings.concat(best.warnings),
     spread: best.spread,
     isLow: isLow,
-    levelOf: levelOf
+    levelOf: levelOf,
+    isTall: isTall,
+    heightOf: heightOf
   };
 }
 

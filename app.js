@@ -4,27 +4,28 @@
   // Bump this on every deploy (kept in sync with sw.js CACHE version).
   // Used to detect when the running page is stale compared to what's
   // published on GitHub Pages — see checkForUpdate() below.
-  var APP_VERSION = '12';
+  var APP_VERSION = '13';
 
   var DEFAULT_ROSTER = [
-    { name: 'Adam', number: 9, level: 3 },
-    { name: 'Albert', number: 18, level: 3 },
-    { name: 'Alexander', number: 21, level: 5 },
-    { name: 'Alvar', number: 1, level: 4 },
-    { name: 'Camilo', number: 18, level: 7 },
-    { name: 'Charlie', number: 22, level: 6 },
-    { name: 'Elis', number: 21, level: 7 },
-    { name: 'Frank', number: 2, level: 7 },
-    { name: 'Hennix', number: 11, level: 7 },
-    { name: 'Hugo', number: 10, level: 4 },
-    { name: 'James', number: 17, level: 7 },
-    { name: 'Lev', number: 20, level: 7 },
-    { name: 'Lucas', number: 25, level: 4 },
-    { name: 'Oscar', number: 23, level: 7 },
-    { name: 'Philip', number: 17, level: 5 },
-    { name: 'Sid', number: 8, level: 4 },
-    { name: 'Theodoros', number: 20, level: 5 }
+    { name: 'Adam', number: 9, level: 3, height: 'short' },
+    { name: 'Albert', number: 18, level: 3, height: 'short' },
+    { name: 'Alexander', number: 21, level: 5, height: 'short' },
+    { name: 'Alvar', number: 1, level: 4, height: 'short' },
+    { name: 'Camilo', number: 18, level: 7, height: 'short' },
+    { name: 'Charlie', number: 22, level: 6, height: 'short' },
+    { name: 'Elis', number: 21, level: 7, height: 'short' },
+    { name: 'Frank', number: 2, level: 7, height: 'short' },
+    { name: 'Hugo', number: 10, level: 4, height: 'short' },
+    { name: 'James', number: 17, level: 7, height: 'short' },
+    { name: 'Lev', number: 20, level: 7, height: 'short' },
+    { name: 'Lucas', number: 25, level: 4, height: 'short' },
+    { name: 'Oscar', number: 23, level: 7, height: 'short' },
+    { name: 'Philip', number: 17, level: 5, height: 'short' },
+    { name: 'Sid', number: 8, level: 4, height: 'short' },
+    { name: 'Theodoros', number: 20, level: 5, height: 'short' }
   ];
+
+  var REMOVED_PLAYER_NAMES = ['Hennix'];
 
   var DEFAULT_SETTINGS = {
     shifts: 8,
@@ -37,7 +38,8 @@
     weightBonusPercent: 0,
     floorThreshold: 3,
     rollingEnabled: false,
-    rollingInterval: 2
+    rollingInterval: 2,
+    minLong: 1
   };
 
   var LS_ROSTER = 'basketRotation.roster.v1';
@@ -45,11 +47,22 @@
   var LS_SETTINGS = 'basketRotation.settings.v1';
 
   function loadRoster() {
+    var roster;
     try {
       var raw = localStorage.getItem(LS_ROSTER);
-      if (raw) return JSON.parse(raw);
-    } catch (e) {}
-    return DEFAULT_ROSTER.slice();
+      roster = raw ? JSON.parse(raw) : DEFAULT_ROSTER.slice();
+    } catch (e) {
+      roster = DEFAULT_ROSTER.slice();
+    }
+    // Migration: drop players who have left the team, and backfill the
+    // 'height' field (long/short) for rosters saved before it existed.
+    roster = roster.filter(function (p) {
+      return REMOVED_PLAYER_NAMES.indexOf(p.name) === -1;
+    });
+    roster.forEach(function (p) {
+      if (p.height !== 'long' && p.height !== 'short') p.height = 'short';
+    });
+    return roster;
   }
   function saveRoster(roster) {
     localStorage.setItem(LS_ROSTER, JSON.stringify(roster));
@@ -134,6 +147,22 @@
           persistAll();
         });
 
+        var heightBtn = document.createElement('button');
+        heightBtn.type = 'button';
+        function paintHeightBtn() {
+          var isLong = p.height === 'long';
+          heightBtn.textContent = isLong ? 'Lång' : 'Kort';
+          heightBtn.className = 'height-toggle ' + (isLong ? 'height-long' : 'height-short');
+          heightBtn.title = 'Klicka för att ändra längd (lång/kort)';
+        }
+        paintHeightBtn();
+        heightBtn.addEventListener('click', function () {
+          p.height = p.height === 'long' ? 'short' : 'long';
+          paintHeightBtn();
+          persistAll();
+          renderMatchday();
+        });
+
         var delBtn = document.createElement('button');
         delBtn.className = 'icon-btn';
         delBtn.textContent = '✕';
@@ -150,6 +179,7 @@
         row.appendChild(numSpan);
         row.appendChild(nameSpan);
         row.appendChild(levelInput);
+        row.appendChild(heightBtn);
         row.appendChild(delBtn);
         list.appendChild(row);
       });
@@ -168,7 +198,7 @@
       alert('En spelare med det namnet finns redan.');
       return;
     }
-    state.roster.push({ name: name, number: null, level: level });
+    state.roster.push({ name: name, number: null, level: level, height: 'short' });
     state.selected.push(name);
     persistAll();
     nameInput.value = '';
@@ -210,9 +240,16 @@
         levelBadge.className = 'level-badge ' + (isLow ? 'level-low' : 'level-high');
         levelBadge.textContent = p.level;
 
+        var heightBadge = document.createElement('span');
+        var isLong = p.height === 'long';
+        heightBadge.className = 'height-badge ' + (isLong ? 'height-long' : 'height-short');
+        heightBadge.textContent = isLong ? 'L' : 'K';
+        heightBadge.title = isLong ? 'Lång' : 'Kort';
+
         row.appendChild(cb);
         row.appendChild(nameSpan);
         row.appendChild(levelBadge);
+        row.appendChild(heightBadge);
         list.appendChild(row);
       });
     updateSelectedCount();
@@ -227,7 +264,7 @@
     var selectedPlayers = state.roster.filter(function (p) {
       return state.selected.indexOf(p.name) !== -1;
     }).map(function (p) {
-      return { name: p.name, level: p.level, number: p.number };
+      return { name: p.name, level: p.level, number: p.number, height: p.height };
     });
 
     if (selectedPlayers.length < state.settings.onCourt) {
@@ -249,6 +286,7 @@
         lowMin: 1,
         weightThreshold: state.settings.weightThreshold,
         weightBonusPercent: state.settings.weightBonusPercent,
+        minLong: state.settings.minLong,
         seed: seed,
         attempts: 60
       });
@@ -267,6 +305,7 @@
       weightThreshold: state.settings.weightThreshold,
       weightBonusPercent: state.settings.weightBonusPercent,
       floorThreshold: state.settings.floorThreshold,
+      minLong: state.settings.minLong,
       seed: seed,
       attempts: 400
     });
@@ -345,8 +384,13 @@
         var badge = document.createElement('span');
         badge.className = 'level-badge ' + (isLow ? 'level-low' : 'level-high');
         badge.textContent = lvl;
+        var hBadge = document.createElement('span');
+        var isLong = res.heightOf && res.heightOf[name] === 'long';
+        hBadge.className = 'height-badge ' + (isLong ? 'height-long' : 'height-short');
+        hBadge.textContent = isLong ? 'L' : 'K';
         pdiv.appendChild(nameSpan);
         pdiv.appendChild(badge);
+        pdiv.appendChild(hBadge);
         grid.appendChild(pdiv);
       });
       card.appendChild(grid);
@@ -488,8 +532,13 @@
         var badge = document.createElement('span');
         badge.className = 'level-badge ' + (isLow ? 'level-low' : 'level-high');
         badge.textContent = lvl;
+        var hBadge = document.createElement('span');
+        var isLong = res.heightOf && res.heightOf[name] === 'long';
+        hBadge.className = 'height-badge ' + (isLong ? 'height-long' : 'height-short');
+        hBadge.textContent = isLong ? 'L' : 'K';
         pdiv.appendChild(nameSpan);
         pdiv.appendChild(badge);
+        pdiv.appendChild(hBadge);
         grid.appendChild(pdiv);
       });
       card.appendChild(grid);
@@ -564,6 +613,7 @@
     document.getElementById('set-floor-threshold').value = state.settings.floorThreshold;
     document.getElementById('set-rolling-enabled').checked = state.settings.rollingEnabled;
     document.getElementById('set-rolling-interval').value = state.settings.rollingInterval;
+    document.getElementById('set-minlong').value = state.settings.minLong;
   }
 
   document.getElementById('save-settings-btn').addEventListener('click', function () {
@@ -578,6 +628,7 @@
     state.settings.floorThreshold = clampInt(document.getElementById('set-floor-threshold').value, 1, 9, 3);
     state.settings.rollingEnabled = document.getElementById('set-rolling-enabled').checked;
     state.settings.rollingInterval = clampInt(document.getElementById('set-rolling-interval').value, 1, 8, 2);
+    state.settings.minLong = clampInt(document.getElementById('set-minlong').value, 0, 4, 1);
     persistAll();
     renderSettings();
     renderMatchday();
@@ -744,7 +795,7 @@
         if (!ref.cb.checked) return;
         var name = ref.player.firstname.split(' ')[0];
         if (state.roster.some(function (p) { return p.name.toLowerCase() === name.toLowerCase(); })) return;
-        state.roster.push({ name: name, number: ref.player.number, level: 5 });
+        state.roster.push({ name: name, number: ref.player.number, level: 5, height: 'short' });
         state.selected.push(name);
         addedNames.push(name);
       });

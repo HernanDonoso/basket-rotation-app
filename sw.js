@@ -1,4 +1,4 @@
-const CACHE = 'basket-rotation-v12';
+const CACHE = 'basket-rotation-v13';
 const ASSETS = ['./', './index.html', './app.js', './scheduler.js', './profixio-import.js', './manifest.json', './icon.svg', './version.json'];
 
 self.addEventListener('install', (event) => {
