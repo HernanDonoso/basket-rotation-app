@@ -349,6 +349,32 @@
     width: 100%;
   }
   label.diff-check input { width: 18px; height: 18px; accent-color: var(--accent); }
+
+  .print-btn-wrap { margin-bottom: 12px; }
+
+  @media print {
+    body { background: #fff; color: #111; padding-bottom: 0; }
+    #update-banner, nav.tabs, .footer-note, .print-btn-wrap,
+    #view-squad, #view-settings, #matchday-attendance-card,
+    #generate-btn, .card:has(#profixio-paste), .card:has(#matchday-paste) {
+      display: none !important;
+    }
+    main { max-width: 100%; padding: 0; }
+    .shift-card {
+      background: #fff;
+      border: 1px solid #999;
+      border-left: 4px solid var(--period-color, #999);
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .shift-title { color: #333; }
+    .lineup-player { background: #f3f3f3; color: #111; }
+    .level-badge, .height-badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .period-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; break-before: auto; }
+    .card { background: #fff; border: 1px solid #999; color: #111; }
+    table.summary th, table.summary td { border-bottom: 1px solid #999; color: #111; }
+    .warn-box, .error-box { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
 </style>
 </head>
 <body>
@@ -405,7 +431,7 @@
       <div id="matchday-import-result" style="margin-top:12px;"></div>
     </div>
 
-    <div class="card">
+    <div class="card" id="matchday-attendance-card">
       <h2>Vilka spelar idag?</h2>
       <div class="selected-count" id="selected-count">0 valda</div>
       <div id="matchday-list"></div>
@@ -485,8 +511,8 @@
 
 <p class="footer-note">Sparas lokalt i webbläsaren. Ingen inloggning, ingen server.</p>
 
-<script src="scheduler.js?v=13"></script>
-<script src="profixio-import.js?v=13"></script>
-<script src="app.js?v=13"></script>
+<script src="scheduler.js?v=14"></script>
+<script src="profixio-import.js?v=14"></script>
+<script src="app.js?v=14"></script>
 </body>
 </html>

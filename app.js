@@ -4,7 +4,7 @@
   // Bump this on every deploy (kept in sync with sw.js CACHE version).
   // Used to detect when the running page is stale compared to what's
   // published on GitHub Pages — see checkForUpdate() below.
-  var APP_VERSION = '13';
+  var APP_VERSION = '14';
 
   var DEFAULT_ROSTER = [
     { name: 'Adam', number: 9, level: 3, height: 'short' },
@@ -325,6 +325,8 @@
       return;
     }
 
+    resultArea.appendChild(makePrintButton());
+
     var levelByName = {};
     selectedPlayers.forEach(function (p) { levelByName[p.name] = p.level; });
     var lowSplit = state.settings.levelSplit;
@@ -439,6 +441,8 @@
       resultArea.appendChild(err);
       return;
     }
+
+    resultArea.appendChild(makePrintButton());
 
     var levelByName = {};
     selectedPlayers.forEach(function (p) { levelByName[p.name] = p.level; });
@@ -578,6 +582,19 @@
 
   function periodColor(periodIndex) {
     return PERIOD_COLORS[periodIndex % PERIOD_COLORS.length];
+  }
+
+  function makePrintButton() {
+    var wrap = document.createElement('div');
+    wrap.className = 'print-btn-wrap';
+    var btn = document.createElement('button');
+    btn.className = 'btn secondary';
+    btn.type = 'button';
+    btn.id = 'print-schedule-btn';
+    btn.textContent = '🖨️ Skriv ut laguppsättningen';
+    btn.addEventListener('click', function () { window.print(); });
+    wrap.appendChild(btn);
+    return wrap;
   }
 
   function makePeriodHeader(periodNumber, startMin, endMin) {
