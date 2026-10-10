@@ -354,9 +354,10 @@
 
   @media print {
     body { background: #fff; color: #111; padding-bottom: 0; }
-    #update-banner, nav.tabs, .footer-note, .print-btn-wrap,
+    #update-banner, nav.tabs, .footer-note, .print-btn-wrap, header,
     #view-squad, #view-settings, #matchday-attendance-card,
-    #generate-btn, .card:has(#profixio-paste), .card:has(#matchday-paste) {
+    #generate-btn, .card:has(#profixio-paste), .card:has(#matchday-paste),
+    .warn-box, .summary-card, .events-card {
       display: none !important;
     }
     main { max-width: 100%; padding: 0; }
@@ -511,8 +512,8 @@
 
 <p class="footer-note">Sparas lokalt i webbläsaren. Ingen inloggning, ingen server.</p>
 
-<script src="scheduler.js?v=14"></script>
-<script src="profixio-import.js?v=14"></script>
-<script src="app.js?v=14"></script>
+<script src="scheduler.js?v=15"></script>
+<script src="profixio-import.js?v=15"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>

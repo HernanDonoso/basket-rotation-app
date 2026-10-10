@@ -4,7 +4,7 @@
   // Bump this on every deploy (kept in sync with sw.js CACHE version).
   // Used to detect when the running page is stale compared to what's
   // published on GitHub Pages — see checkForUpdate() below.
-  var APP_VERSION = '14';
+  var APP_VERSION = '15';
 
   var DEFAULT_ROSTER = [
     { name: 'Adam', number: 9, level: 3, height: 'short' },
@@ -401,7 +401,7 @@
 
     // Summary table
     var summaryCard = document.createElement('div');
-    summaryCard.className = 'card';
+    summaryCard.className = 'card summary-card';
     var h2 = document.createElement('h2');
     h2.textContent = 'Speltid per spelare';
     summaryCard.appendChild(h2);
@@ -481,7 +481,7 @@
 
     // Substitution events timeline
     var eventsCard = document.createElement('div');
-    eventsCard.className = 'card';
+    eventsCard.className = 'card events-card';
     var eh2 = document.createElement('h2');
     eh2.textContent = 'Byten under matchen';
     eventsCard.appendChild(eh2);
@@ -551,7 +551,7 @@
 
     // Summary table
     var summaryCard = document.createElement('div');
-    summaryCard.className = 'card';
+    summaryCard.className = 'card summary-card';
     var h2 = document.createElement('h2');
     h2.textContent = 'Speltid per spelare';
     summaryCard.appendChild(h2);
